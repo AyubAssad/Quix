@@ -47,6 +47,20 @@ function buildShuffledQuestionOptions(questionType, options, correctOption) {
   };
 }
 
+function buildQuestionOptions(questionType, options, correctOption, shouldShuffle) {
+  if (shouldShuffle) {
+    return buildShuffledQuestionOptions(questionType, options, correctOption);
+  }
+
+  return {
+    option_a: options[0]?.label ?? null,
+    option_b: options[1]?.label ?? null,
+    option_c: questionType === "true_false" ? null : options[2]?.label ?? null,
+    option_d: questionType === "true_false" ? null : options[3]?.label ?? null,
+    correct_option: correctOption
+  };
+}
+
 export default function AdminPanel() {
   const [allowed, setAllowed] = useState(false);
   const [ready, setReady] = useState(false);
@@ -484,19 +498,12 @@ export default function AdminPanel() {
           { label: questionForm.option_c.trim(), isCorrect: questionForm.correct_option === "c" },
           { label: questionForm.option_d.trim(), isCorrect: questionForm.correct_option === "d" }
         ];
-    const questionOptions = shuffleAnswers
-      ? buildShuffledQuestionOptions(
-          questionForm.question_type,
-          baseOptions,
-          questionForm.correct_option
-        )
-      : {
-          option_a: baseOptions[0]?.label ?? null,
-          option_b: baseOptions[1]?.label ?? null,
-          option_c: isTrueFalse ? null : baseOptions[2]?.label ?? null,
-          option_d: isTrueFalse ? null : baseOptions[3]?.label ?? null,
-          correct_option: questionForm.correct_option
-        };
+    const questionOptions = buildQuestionOptions(
+      questionForm.question_type,
+      baseOptions,
+      questionForm.correct_option,
+      shuffleAnswers
+    );
 
     const payload = {
       lecture_id: questionForm.lecture_id,
@@ -589,24 +596,17 @@ export default function AdminPanel() {
           return;
         }
 
-        const mcqOptions = shuffleAnswers
-          ? buildShuffledQuestionOptions(
-              "mcq",
-              [
-                { label: lines[1], isCorrect: correctOption === "a" },
-                { label: lines[2], isCorrect: correctOption === "b" },
-                { label: lines[3], isCorrect: correctOption === "c" },
-                { label: lines[4], isCorrect: correctOption === "d" }
-              ],
-              correctOption
-            )
-          : {
-              option_a: lines[1],
-              option_b: lines[2],
-              option_c: lines[3],
-              option_d: lines[4],
-              correct_option: correctOption
-            };
+        const mcqOptions = buildQuestionOptions(
+          "mcq",
+          [
+            { label: lines[1], isCorrect: correctOption === "a" },
+            { label: lines[2], isCorrect: correctOption === "b" },
+            { label: lines[3], isCorrect: correctOption === "c" },
+            { label: lines[4], isCorrect: correctOption === "d" }
+          ],
+          correctOption,
+          shuffleAnswers
+        );
 
         payload.push({
           lecture_id: questionForm.lecture_id,
@@ -629,22 +629,15 @@ export default function AdminPanel() {
           return;
         }
 
-        const trueFalseOptions = shuffleAnswers
-          ? buildShuffledQuestionOptions(
-              "true_false",
-              [
-                { label: "True", isCorrect: correctValue === "true" },
-                { label: "False", isCorrect: correctValue === "false" }
-              ],
-              correctValue === "true" ? "a" : "b"
-            )
-          : {
-              option_a: "True",
-              option_b: "False",
-              option_c: null,
-              option_d: null,
-              correct_option: correctValue === "true" ? "a" : "b"
-            };
+        const trueFalseOptions = buildQuestionOptions(
+          "true_false",
+          [
+            { label: "True", isCorrect: correctValue === "true" },
+            { label: "False", isCorrect: correctValue === "false" }
+          ],
+          correctValue === "true" ? "a" : "b",
+          shuffleAnswers
+        );
 
         payload.push({
           lecture_id: questionForm.lecture_id,
@@ -664,6 +657,53 @@ export default function AdminPanel() {
 
     setBulkQuestionsText("");
     setStatus(`${payload.length} questions added successfully.`);
+    loadQuestions();
+  }
+
+  async function shuffleExistingQuestions() {
+    setStatus("");
+
+    if (!supabase) {
+      setStatus("Add your Supabase URL and anon key in .env.local first.");
+      return;
+    }
+
+    if (questions.length === 0) {
+      setStatus("No existing questions to shuffle.");
+      return;
+    }
+
+    const updates = questions.map((question) => {
+      const isTrueFalse = question.question_type === "true_false";
+      const options = isTrueFalse
+        ? [
+            { label: question.option_a, isCorrect: question.correct_option === "a" },
+            { label: question.option_b, isCorrect: question.correct_option === "b" }
+          ]
+        : [
+            { label: question.option_a, isCorrect: question.correct_option === "a" },
+            { label: question.option_b, isCorrect: question.correct_option === "b" },
+            { label: question.option_c, isCorrect: question.correct_option === "c" },
+            { label: question.option_d, isCorrect: question.correct_option === "d" }
+          ];
+
+      return {
+        id: question.id,
+        ...buildShuffledQuestionOptions(
+          question.question_type,
+          options.filter((option) => Boolean(option.label)),
+          question.correct_option
+        )
+      };
+    });
+
+    const { error } = await supabase.from("questions").upsert(updates);
+    if (error) {
+      setStatus(error.message);
+      return;
+    }
+
+    setStatus(`Shuffled ${updates.length} existing questions.`);
     loadQuestions();
   }
 
@@ -1376,6 +1416,12 @@ export default function AdminPanel() {
         </form>
         <div className="card stack">
           <h2 className="section-title">Question totals</h2>
+          <div className="action-row">
+            <p className="muted">Apply shuffle to questions that were already saved before.</p>
+            <button className="button secondary" onClick={shuffleExistingQuestions} type="button">
+              Shuffle old questions
+            </button>
+          </div>
           {questions.length === 0 && <p className="muted">No questions yet.</p>}
           {questionSummary.map((item) => (
             <div className="panel action-row" key={item.lectureTitle}>
