@@ -76,6 +76,21 @@ create table if not exists public.submissions (
   unique (user_id, question_id)
 );
 
+create table if not exists public.question_reports (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  lecture_id uuid not null references public.lectures(id) on delete cascade,
+  question_id uuid not null references public.questions(id) on delete cascade,
+  message text not null,
+  admin_reply text,
+  answered_at timestamptz,
+  created_at timestamptz not null default timezone('utc', now()),
+  unique (user_id, question_id)
+);
+
+alter table public.question_reports add column if not exists admin_reply text;
+alter table public.question_reports add column if not exists answered_at timestamptz;
+
 create or replace function public.is_admin()
 returns boolean
 language sql
@@ -133,6 +148,7 @@ alter table public.modules enable row level security;
 alter table public.lectures enable row level security;
 alter table public.questions enable row level security;
 alter table public.submissions enable row level security;
+alter table public.question_reports enable row level security;
 
 drop policy if exists "profiles_select_authenticated" on public.profiles;
 create policy "profiles_select_authenticated"
@@ -252,6 +268,43 @@ for update
 to authenticated
 using (auth.uid() = user_id)
 with check (auth.uid() = user_id);
+
+drop policy if exists "question_reports_select_own_or_admin" on public.question_reports;
+create policy "question_reports_select_own_or_admin"
+on public.question_reports
+for select
+to authenticated
+using (auth.uid() = user_id or public.is_admin());
+
+drop policy if exists "question_reports_insert_own" on public.question_reports;
+create policy "question_reports_insert_own"
+on public.question_reports
+for insert
+to authenticated
+with check (auth.uid() = user_id);
+
+drop policy if exists "question_reports_update_own" on public.question_reports;
+create policy "question_reports_update_own"
+on public.question_reports
+for update
+to authenticated
+using (auth.uid() = user_id)
+with check (auth.uid() = user_id);
+
+drop policy if exists "question_reports_admin_delete" on public.question_reports;
+create policy "question_reports_admin_delete"
+on public.question_reports
+for delete
+to authenticated
+using (public.is_admin());
+
+drop policy if exists "question_reports_admin_update" on public.question_reports;
+create policy "question_reports_admin_update"
+on public.question_reports
+for update
+to authenticated
+using (public.is_admin())
+with check (public.is_admin());
 
 grant execute on function public.recalculate_user_points(uuid) to authenticated;
 grant execute on function public.is_admin() to authenticated;

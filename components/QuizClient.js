@@ -9,6 +9,9 @@ export default function QuizClient({ lectureId, lectureTitle }) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [checkedAnswers, setCheckedAnswers] = useState({});
   const [selectedOption, setSelectedOption] = useState("");
+  const [reportMessage, setReportMessage] = useState("");
+  const [reportStatus, setReportStatus] = useState("");
+  const [reportsByQuestion, setReportsByQuestion] = useState({});
   const [status, setStatus] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -21,6 +24,8 @@ export default function QuizClient({ lectureId, lectureTitle }) {
     const currentQuestion = questions[currentIndex];
     const savedAnswer = currentQuestion ? checkedAnswers[currentQuestion.id]?.selected_option : "";
     setSelectedOption(savedAnswer ?? "");
+    setReportMessage("");
+    setReportStatus("");
   }, [checkedAnswers, currentIndex, questions]);
 
   async function loadPage() {
@@ -51,6 +56,19 @@ export default function QuizClient({ lectureId, lectureTitle }) {
     }
 
     setQuestions(data ?? []);
+    if (currentUser) {
+      const { data: reportData } = await supabase
+        .from("question_reports")
+        .select("id, question_id, message, admin_reply, answered_at")
+        .eq("lecture_id", lectureId)
+        .eq("user_id", currentUser.id);
+
+      setReportsByQuestion(
+        Object.fromEntries((reportData ?? []).map((report) => [report.question_id, report]))
+      );
+    } else {
+      setReportsByQuestion({});
+    }
     setCurrentIndex(0);
     setCheckedAnswers({});
     setSelectedOption("");
@@ -59,6 +77,7 @@ export default function QuizClient({ lectureId, lectureTitle }) {
 
   const currentQuestion = questions[currentIndex];
   const currentAnswer = currentQuestion ? checkedAnswers[currentQuestion.id] : null;
+  const currentReport = currentQuestion ? reportsByQuestion[currentQuestion.id] : null;
   const totalEarned = useMemo(() => {
     return Object.values(checkedAnswers).reduce(
       (sum, item) => sum + (item?.points_awarded ?? 0),
@@ -148,6 +167,56 @@ export default function QuizClient({ lectureId, lectureTitle }) {
     }
   }
 
+  async function submitReport() {
+    if (!supabase) {
+      setReportStatus("Add your Supabase URL and anon key in .env.local first.");
+      return;
+    }
+
+    if (!user) {
+      setReportStatus("Please login first to send a report.");
+      return;
+    }
+
+    if (!currentQuestion) {
+      return;
+    }
+
+    const trimmedMessage = reportMessage.trim();
+    if (!trimmedMessage) {
+      setReportStatus("Please write your message first.");
+      return;
+    }
+
+    const { error } = await supabase.from("question_reports").upsert(
+      {
+        user_id: user.id,
+        lecture_id: lectureId,
+        question_id: currentQuestion.id,
+        message: trimmedMessage
+      },
+      { onConflict: "user_id,question_id" }
+    );
+
+    if (error) {
+      setReportStatus(error.message);
+      return;
+    }
+
+    setReportStatus("Your report was sent.");
+    setReportsByQuestion((current) => ({
+      ...current,
+      [currentQuestion.id]: {
+        ...(current[currentQuestion.id] || {}),
+        question_id: currentQuestion.id,
+        message: trimmedMessage,
+        admin_reply: current[currentQuestion.id]?.admin_reply || null,
+        answered_at: current[currentQuestion.id]?.answered_at || null
+      }
+    }));
+    setReportMessage("");
+  }
+
   if (loading) {
     return <div className="panel">Loading quiz...</div>;
   }
@@ -228,6 +297,32 @@ export default function QuizClient({ lectureId, lectureTitle }) {
               {saving ? "Checking..." : "Check answer"}
             </button>
           )}
+
+          <div className="report-box">
+            <label className="field">
+              <span>Report this question</span>
+              <textarea
+                onChange={(event) => setReportMessage(event.target.value)}
+                placeholder="Send a note if this question has a mistake or needs review."
+                rows="3"
+                value={reportMessage}
+              />
+            </label>
+            <button className="button secondary" onClick={submitReport} type="button">
+              Send report
+            </button>
+            {reportStatus && <div className="message">{reportStatus}</div>}
+            {currentReport?.message && (
+              <div className="message">
+                Your last report: {currentReport.message}
+              </div>
+            )}
+            {currentReport?.admin_reply && (
+              <div className="message message-success">
+                Admin reply: {currentReport.admin_reply}
+              </div>
+            )}
+          </div>
         </div>
 
         <div className="quiz-nav">

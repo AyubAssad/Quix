@@ -39,6 +39,10 @@ export default function AdminPanel() {
   });
   const [lectures, setLectures] = useState([]);
   const [questions, setQuestions] = useState([]);
+  const [reports, setReports] = useState([]);
+  const [reportReplies, setReportReplies] = useState({});
+  const [reportLectureFilter, setReportLectureFilter] = useState("");
+  const [reportStatusFilter, setReportStatusFilter] = useState("all");
   const [lectureForm, setLectureForm] = useState(emptyLecture);
   const [questionForm, setQuestionForm] = useState(emptyQuestion);
   const [questionMode, setQuestionMode] = useState("single");
@@ -106,6 +110,38 @@ export default function AdminPanel() {
     return Array.from(new Set(blockNames)).sort();
   }, [blocks, lectures, moduleForm.stage_name]);
 
+  const questionSummary = useMemo(() => {
+    const counts = questions.reduce((map, question) => {
+      const lectureLabel = question.lectures?.title || "Unknown lecture";
+      map[lectureLabel] = (map[lectureLabel] || 0) + 1;
+      return map;
+    }, {});
+
+    return Object.entries(counts)
+      .map(([lectureTitle, count]) => ({ lectureTitle, count }))
+      .sort((a, b) => a.lectureTitle.localeCompare(b.lectureTitle));
+  }, [questions]);
+
+  const reportLectureOptions = useMemo(() => {
+    return Array.from(
+      new Set(reports.map((report) => report.lectures?.title).filter(Boolean))
+    ).sort();
+  }, [reports]);
+
+  const filteredReports = useMemo(() => {
+    return reports.filter((report) => {
+      const matchesLecture =
+        !reportLectureFilter || report.lectures?.title === reportLectureFilter;
+      const isAnswered = Boolean(report.answered_at);
+      const matchesStatus =
+        reportStatusFilter === "all" ||
+        (reportStatusFilter === "answered" && isAnswered) ||
+        (reportStatusFilter === "unanswered" && !isAnswered);
+
+      return matchesLecture && matchesStatus;
+    });
+  }, [reportLectureFilter, reportStatusFilter, reports]);
+
   useEffect(() => {
     loadAdminPage();
   }, []);
@@ -130,7 +166,8 @@ export default function AdminPanel() {
         loadBlocks(),
         loadModules(),
         loadLectures(),
-        loadQuestions()
+        loadQuestions(),
+        loadReports()
       ]);
     }
 
@@ -203,6 +240,24 @@ export default function AdminPanel() {
       .order("created_at", { ascending: true });
 
     setQuestions(data ?? []);
+  }
+
+  async function loadReports() {
+    if (!supabase) {
+      return;
+    }
+
+    const { data } = await supabase
+      .from("question_reports")
+      .select(
+        "id, message, admin_reply, answered_at, created_at, questions(question_text), lectures(title), profiles(email)"
+      )
+      .order("created_at", { ascending: false });
+
+    setReports(data ?? []);
+    setReportReplies(
+      Object.fromEntries((data ?? []).map((report) => [report.id, report.admin_reply || ""]))
+    );
   }
 
   async function createStage(event) {
@@ -499,6 +554,40 @@ export default function AdminPanel() {
     if (table === "questions") {
       loadQuestions();
     }
+    if (table === "question_reports") {
+      loadReports();
+    }
+  }
+
+  async function replyToReport(reportId) {
+    setStatus("");
+
+    if (!supabase) {
+      setStatus("Add your Supabase URL and anon key in .env.local first.");
+      return;
+    }
+
+    const reply = (reportReplies[reportId] || "").trim();
+    if (!reply) {
+      setStatus("Please write a reply before sending.");
+      return;
+    }
+
+    const { error } = await supabase
+      .from("question_reports")
+      .update({
+        admin_reply: reply,
+        answered_at: new Date().toISOString()
+      })
+      .eq("id", reportId);
+
+    if (error) {
+      setStatus(error.message);
+      return;
+    }
+
+    setStatus("Reply sent.");
+    loadReports();
   }
 
   if (!ready) {
@@ -1067,23 +1156,100 @@ export default function AdminPanel() {
           )}
         </form>
         <div className="card stack">
-          <h2 className="section-title">Existing questions</h2>
+          <h2 className="section-title">Question totals</h2>
           {questions.length === 0 && <p className="muted">No questions yet.</p>}
-          {questions.map((question) => (
-            <div className="panel action-row" key={question.id}>
+          {questionSummary.map((item) => (
+            <div className="panel action-row" key={item.lectureTitle}>
               <div>
-                <strong>{question.question_text}</strong>
-                <p className="muted">
-                  {(question.lectures && question.lectures.title) || "Lecture"} / {question.question_type}
-                </p>
+                <strong>{item.lectureTitle}</strong>
+                <p className="muted">{item.count} questions</p>
               </div>
-              <button
-                className="button danger"
-                onClick={() => deleteItem("questions", question.id, "Question deleted.")}
-                type="button"
+            </div>
+          ))}
+        </div>
+        <div className="card stack">
+          <h2 className="section-title">Question reports</h2>
+          <div className="grid">
+            <label className="field">
+              <span>Filter by lecture</span>
+              <select
+                onChange={(event) => setReportLectureFilter(event.target.value)}
+                value={reportLectureFilter}
               >
-                Delete
-              </button>
+                <option value="">All lectures</option>
+                {reportLectureOptions.map((lectureTitle) => (
+                  <option key={lectureTitle} value={lectureTitle}>
+                    {lectureTitle}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="field">
+              <span>Filter by status</span>
+              <select
+                onChange={(event) => setReportStatusFilter(event.target.value)}
+                value={reportStatusFilter}
+              >
+                <option value="all">All reports</option>
+                <option value="unanswered">Unanswered</option>
+                <option value="answered">Answered</option>
+              </select>
+            </label>
+          </div>
+          {reports.length === 0 && <p className="muted">No reports yet.</p>}
+          {reports.length > 0 && filteredReports.length === 0 && (
+            <p className="muted">No reports match this filter.</p>
+          )}
+          {filteredReports.map((report) => (
+            <div className="panel stack" key={report.id}>
+              <div className="action-row">
+                <div>
+                  <strong>{report.lectures?.title || "Lecture"}</strong>
+                  <p className="muted">
+                    {report.profiles?.email || "Student report"} /{" "}
+                    {report.answered_at ? "Answered" : "Waiting"}
+                  </p>
+                </div>
+                <button
+                  className="button danger"
+                  onClick={() =>
+                    deleteItem("question_reports", report.id, "Report deleted.")
+                  }
+                  type="button"
+                >
+                  Delete
+                </button>
+              </div>
+              <p className="muted">{report.questions?.question_text}</p>
+              <div className="message">{report.message}</div>
+              <label className="field">
+                <span>Your reply</span>
+                <textarea
+                  onChange={(event) =>
+                    setReportReplies((current) => ({
+                      ...current,
+                      [report.id]: event.target.value
+                    }))
+                  }
+                  placeholder="Write your answer to this student report."
+                  rows="3"
+                  value={reportReplies[report.id] || ""}
+                />
+              </label>
+              <div className="action-row">
+                {report.answered_at ? (
+                  <p className="muted">Answered already. You can edit and send again.</p>
+                ) : (
+                  <p className="muted">Not answered yet.</p>
+                )}
+                <button
+                  className="button"
+                  onClick={() => replyToReport(report.id)}
+                  type="button"
+                >
+                  Send reply
+                </button>
+              </div>
             </div>
           ))}
         </div>
