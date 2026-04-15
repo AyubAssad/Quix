@@ -3,6 +3,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
 
+function cleanOptionLabel(label) {
+  if (!label) {
+    return "";
+  }
+
+  return label.replace(/^[A-D]\.\s*/i, "").trim();
+}
+
 export default function QuizClient({ lectureId, lectureTitle }) {
   const [user, setUser] = useState(null);
   const [allQuestions, setAllQuestions] = useState([]);
@@ -309,7 +317,7 @@ export default function QuizClient({ lectureId, lectureTitle }) {
                       onChange={() => setSelectedOption(value)}
                       type="radio"
                     />
-                    <span>{label}</span>
+                    <span>{cleanOptionLabel(label)}</span>
                   </label>
                 );
               })}
