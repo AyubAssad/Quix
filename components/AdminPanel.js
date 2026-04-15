@@ -668,12 +668,16 @@ export default function AdminPanel() {
       return;
     }
 
-    if (questions.length === 0) {
+    const validQuestions = questions.filter((question) => Boolean(question.lecture_id));
+
+    if (validQuestions.length === 0) {
       setStatus("No existing questions to shuffle.");
       return;
     }
 
-    const updates = questions.map((question) => {
+    const skippedCount = questions.length - validQuestions.length;
+
+    const updates = validQuestions.map((question) => {
       const isTrueFalse = question.question_type === "true_false";
       const options = isTrueFalse
         ? [
@@ -703,7 +707,11 @@ export default function AdminPanel() {
       return;
     }
 
-    setStatus(`Shuffled ${updates.length} existing questions.`);
+    setStatus(
+      skippedCount > 0
+        ? `Shuffled ${updates.length} questions and skipped ${skippedCount} broken old rows.`
+        : `Shuffled ${updates.length} existing questions.`
+    );
     loadQuestions();
   }
 
