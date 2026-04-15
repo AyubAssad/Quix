@@ -71,6 +71,13 @@ export default function AdminPanel() {
   const [lectureForm, setLectureForm] = useState(emptyLecture);
   const [questionForm, setQuestionForm] = useState(emptyQuestion);
   const [editingQuestionId, setEditingQuestionId] = useState(null);
+  const [editQuestionPath, setEditQuestionPath] = useState({
+    stage: "",
+    block: "",
+    module_name: "",
+    lecture_id: "",
+    question_id: ""
+  });
   const [questionMode, setQuestionMode] = useState("single");
   const [bulkQuestionType, setBulkQuestionType] = useState("mcq");
   const [bulkQuestionsText, setBulkQuestionsText] = useState("");
@@ -152,6 +159,49 @@ export default function AdminPanel() {
   const lectureQuestions = useMemo(() => {
     return questions.filter((question) => question.lecture_id === questionForm.lecture_id);
   }, [questionForm.lecture_id, questions]);
+
+  const editStageOptions = useMemo(() => {
+    return Array.from(new Set(lectures.map((lecture) => lecture.stage).filter(Boolean))).sort();
+  }, [lectures]);
+
+  const editBlockOptions = useMemo(() => {
+    return Array.from(
+      new Set(
+        lectures
+          .filter((lecture) => lecture.stage === editQuestionPath.stage)
+          .map((lecture) => lecture.block)
+          .filter(Boolean)
+      )
+    ).sort();
+  }, [editQuestionPath.stage, lectures]);
+
+  const editModuleOptions = useMemo(() => {
+    return Array.from(
+      new Set(
+        lectures
+          .filter(
+            (lecture) =>
+              lecture.stage === editQuestionPath.stage &&
+              lecture.block === editQuestionPath.block
+          )
+          .map((lecture) => lecture.module_name)
+          .filter(Boolean)
+      )
+    ).sort();
+  }, [editQuestionPath.block, editQuestionPath.stage, lectures]);
+
+  const editLectureOptions = useMemo(() => {
+    return lectures.filter(
+      (lecture) =>
+        lecture.stage === editQuestionPath.stage &&
+        lecture.block === editQuestionPath.block &&
+        lecture.module_name === editQuestionPath.module_name
+    );
+  }, [editQuestionPath.block, editQuestionPath.module_name, editQuestionPath.stage, lectures]);
+
+  const editQuestionOptions = useMemo(() => {
+    return questions.filter((question) => question.lecture_id === editQuestionPath.lecture_id);
+  }, [editQuestionPath.lecture_id, questions]);
 
   const reportLectureOptions = useMemo(() => {
     return Array.from(
@@ -659,9 +709,18 @@ export default function AdminPanel() {
   }
 
   function startEditingQuestion(question) {
-    setAdminView("question");
+    const lecture = lectures.find((item) => item.id === question.lecture_id);
+
+    setAdminView("editQuestion");
     setQuestionMode("single");
     setEditingQuestionId(question.id);
+    setEditQuestionPath({
+      stage: lecture?.stage || "",
+      block: lecture?.block || "",
+      module_name: lecture?.module_name || "",
+      lecture_id: question.lecture_id,
+      question_id: question.id
+    });
     setQuestionForm({
       lecture_id: question.lecture_id,
       question_type: question.question_type,
@@ -678,6 +737,13 @@ export default function AdminPanel() {
   function cancelEditingQuestion() {
     setEditingQuestionId(null);
     setQuestionForm(emptyQuestion);
+    setEditQuestionPath({
+      stage: "",
+      block: "",
+      module_name: "",
+      lecture_id: "",
+      question_id: ""
+    });
     setStatus("Question editing cancelled.");
   }
 
@@ -749,6 +815,13 @@ export default function AdminPanel() {
             type="button"
           >
             Add question
+          </button>
+          <button
+            className={`button ${adminView === "editQuestion" ? "" : "secondary"}`}
+            onClick={() => setAdminView("editQuestion")}
+            type="button"
+          >
+            Edit question
           </button>
           <button
             className={`button ${adminView === "module" ? "" : "secondary"}`}
@@ -1076,18 +1149,9 @@ export default function AdminPanel() {
         <div className="stack">
         <form className="card stack" onSubmit={createQuestion}>
           <h2 className="section-title">Add question</h2>
-          {editingQuestionId && (
-            <div className="action-row">
-              <div className="message">Editing an existing question.</div>
-              <button className="button secondary" onClick={cancelEditingQuestion} type="button">
-                Cancel edit
-              </button>
-            </div>
-          )}
           <div className="nav-links">
             <button
               className={`button ${questionMode === "single" ? "" : "secondary"}`}
-              disabled={Boolean(editingQuestionId)}
               onClick={() => setQuestionMode("single")}
               type="button"
             >
@@ -1095,7 +1159,6 @@ export default function AdminPanel() {
             </button>
             <button
               className={`button ${questionMode === "bulk" ? "" : "secondary"}`}
-              disabled={Boolean(editingQuestionId)}
               onClick={() => setQuestionMode("bulk")}
               type="button"
             >
@@ -1127,39 +1190,6 @@ export default function AdminPanel() {
               ))}
             </select>
           </label>
-          {questionMode === "single" && questionForm.lecture_id && lectureQuestions.length > 0 && (
-            <label className="field">
-              <span>Select existing question</span>
-              <select
-                onChange={(event) => {
-                  if (!event.target.value) {
-                    cancelEditingQuestion();
-                    setQuestionForm((current) => ({
-                      ...emptyQuestion,
-                      lecture_id: questionForm.lecture_id
-                    }));
-                    return;
-                  }
-
-                  const selectedQuestion = lectureQuestions.find(
-                    (question) => question.id === event.target.value
-                  );
-
-                  if (selectedQuestion) {
-                    startEditingQuestion(selectedQuestion);
-                  }
-                }}
-                value={editingQuestionId || ""}
-              >
-                <option value="">Create a new question</option>
-                {lectureQuestions.map((question, index) => (
-                  <option key={question.id} value={question.id}>
-                    {index + 1}. {question.question_text}
-                  </option>
-                ))}
-              </select>
-            </label>
-          )}
           {questionMode === "single" && (
             <>
           <label className="remember-row">
@@ -1352,37 +1382,6 @@ export default function AdminPanel() {
           ))}
         </div>
         <div className="card stack">
-          <h2 className="section-title">Question bank</h2>
-          {questions.length === 0 && <p className="muted">No questions yet.</p>}
-          {questions.map((question) => (
-            <div className="panel stack" key={question.id}>
-              <div className="action-row">
-                <div>
-                  <strong>{question.lectures?.title || "Lecture"}</strong>
-                  <p className="muted">{question.question_type}</p>
-                </div>
-                <div className="nav-links">
-                  <button
-                    className="button secondary"
-                    onClick={() => startEditingQuestion(question)}
-                    type="button"
-                  >
-                    Edit
-                  </button>
-                  <button
-                    className="button danger"
-                    onClick={() => deleteItem("questions", question.id, "Question deleted.")}
-                    type="button"
-                  >
-                    Delete
-                  </button>
-                </div>
-              </div>
-              <p className="muted">{question.question_text}</p>
-            </div>
-          ))}
-        </div>
-        <div className="card stack">
           <h2 className="section-title">Question reports</h2>
           <div className="grid">
             <label className="field">
@@ -1468,6 +1467,295 @@ export default function AdminPanel() {
             </div>
           ))}
         </div>
+        </div>
+      )}
+
+      {adminView === "editQuestion" && (
+        <div className="stack">
+          <div className="card stack">
+            <h2 className="section-title">Edit question</h2>
+            <p className="muted">
+              Choose the full lecture path, then pick the exact question you want to edit.
+            </p>
+            <div className="grid">
+              <label className="field">
+                <span>Stage</span>
+                <select
+                  onChange={(event) => {
+                    cancelEditingQuestion();
+                    setEditQuestionPath({
+                      stage: event.target.value,
+                      block: "",
+                      module_name: "",
+                      lecture_id: "",
+                      question_id: ""
+                    });
+                  }}
+                  value={editQuestionPath.stage}
+                >
+                  <option value="">Choose stage</option>
+                  {editStageOptions.map((stage) => (
+                    <option key={stage} value={stage}>
+                      {stage}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="field">
+                <span>Block</span>
+                <select
+                  disabled={!editQuestionPath.stage}
+                  onChange={(event) => {
+                    cancelEditingQuestion();
+                    setEditQuestionPath((current) => ({
+                      ...current,
+                      block: event.target.value,
+                      module_name: "",
+                      lecture_id: "",
+                      question_id: ""
+                    }));
+                  }}
+                  value={editQuestionPath.block}
+                >
+                  <option value="">Choose block</option>
+                  {editBlockOptions.map((block) => (
+                    <option key={block} value={block}>
+                      {block}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="field">
+                <span>Module</span>
+                <select
+                  disabled={!editQuestionPath.block}
+                  onChange={(event) => {
+                    cancelEditingQuestion();
+                    setEditQuestionPath((current) => ({
+                      ...current,
+                      module_name: event.target.value,
+                      lecture_id: "",
+                      question_id: ""
+                    }));
+                  }}
+                  value={editQuestionPath.module_name}
+                >
+                  <option value="">Choose module</option>
+                  {editModuleOptions.map((moduleName) => (
+                    <option key={moduleName} value={moduleName}>
+                      {moduleName}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="field">
+                <span>Lecture</span>
+                <select
+                  disabled={!editQuestionPath.module_name}
+                  onChange={(event) => {
+                    cancelEditingQuestion();
+                    setEditQuestionPath((current) => ({
+                      ...current,
+                      lecture_id: event.target.value,
+                      question_id: ""
+                    }));
+                  }}
+                  value={editQuestionPath.lecture_id}
+                >
+                  <option value="">Choose lecture</option>
+                  {editLectureOptions.map((lecture) => (
+                    <option key={lecture.id} value={lecture.id}>
+                      {lecture.title}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="field">
+                <span>Question</span>
+                <select
+                  disabled={!editQuestionPath.lecture_id}
+                  onChange={(event) => {
+                    const selectedQuestion = editQuestionOptions.find(
+                      (question) => question.id === event.target.value
+                    );
+
+                    setEditQuestionPath((current) => ({
+                      ...current,
+                      question_id: event.target.value
+                    }));
+
+                    if (selectedQuestion) {
+                      startEditingQuestion(selectedQuestion);
+                    }
+                  }}
+                  value={editQuestionPath.question_id}
+                >
+                  <option value="">Choose question</option>
+                  {editQuestionOptions.map((question, index) => (
+                    <option key={question.id} value={question.id}>
+                      {index + 1}. {question.question_text}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+          </div>
+
+          {editingQuestionId && (
+            <form className="card stack" onSubmit={createQuestion}>
+              <div className="action-row">
+                <h2 className="section-title">Update selected question</h2>
+                <button className="button secondary" onClick={cancelEditingQuestion} type="button">
+                  Cancel edit
+                </button>
+              </div>
+
+              <label className="remember-row">
+                <input
+                  checked={shuffleAnswers}
+                  onChange={(event) => setShuffleAnswers(event.target.checked)}
+                  type="checkbox"
+                />
+                <span>Shuffle answer positions automatically</span>
+              </label>
+
+              <label className="field">
+                <span>Question type</span>
+                <select
+                  value={questionForm.question_type}
+                  onChange={(event) =>
+                    setQuestionForm((current) => ({
+                      ...current,
+                      question_type: event.target.value,
+                      option_a: "",
+                      option_b: "",
+                      option_c: "",
+                      option_d: "",
+                      correct_option: "a"
+                    }))
+                  }
+                >
+                  <option value="mcq">MCQ</option>
+                  <option value="true_false">True / False</option>
+                </select>
+              </label>
+
+              <label className="field">
+                <span>Question</span>
+                <textarea
+                  required
+                  rows="3"
+                  value={questionForm.question_text}
+                  onChange={(event) =>
+                    setQuestionForm((current) => ({
+                      ...current,
+                      question_text: event.target.value
+                    }))
+                  }
+                />
+              </label>
+
+              {questionForm.question_type === "mcq" && (
+                <>
+                  <label className="field">
+                    <span>Option A</span>
+                    <input
+                      required
+                      value={questionForm.option_a}
+                      onChange={(event) =>
+                        setQuestionForm((current) => ({
+                          ...current,
+                          option_a: event.target.value
+                        }))
+                      }
+                    />
+                  </label>
+                  <label className="field">
+                    <span>Option B</span>
+                    <input
+                      required
+                      value={questionForm.option_b}
+                      onChange={(event) =>
+                        setQuestionForm((current) => ({
+                          ...current,
+                          option_b: event.target.value
+                        }))
+                      }
+                    />
+                  </label>
+                  <label className="field">
+                    <span>Option C</span>
+                    <input
+                      required
+                      value={questionForm.option_c}
+                      onChange={(event) =>
+                        setQuestionForm((current) => ({
+                          ...current,
+                          option_c: event.target.value
+                        }))
+                      }
+                    />
+                  </label>
+                  <label className="field">
+                    <span>Option D</span>
+                    <input
+                      required
+                      value={questionForm.option_d}
+                      onChange={(event) =>
+                        setQuestionForm((current) => ({
+                          ...current,
+                          option_d: event.target.value
+                        }))
+                      }
+                    />
+                  </label>
+                </>
+              )}
+
+              {questionForm.question_type === "true_false" && (
+                <div className="message">This question will use the answers: True and False.</div>
+              )}
+
+              <label className="field">
+                <span>Correct answer</span>
+                <select
+                  value={questionForm.correct_option}
+                  onChange={(event) =>
+                    setQuestionForm((current) => ({
+                      ...current,
+                      correct_option: event.target.value
+                    }))
+                  }
+                >
+                  <option value="a">
+                    {questionForm.question_type === "true_false" ? "True" : "Option A"}
+                  </option>
+                  <option value="b">
+                    {questionForm.question_type === "true_false" ? "False" : "Option B"}
+                  </option>
+                  {questionForm.question_type === "mcq" && <option value="c">Option C</option>}
+                  {questionForm.question_type === "mcq" && <option value="d">Option D</option>}
+                </select>
+              </label>
+
+              <div className="action-row">
+                <button className="button" type="submit">
+                  Update question
+                </button>
+                <button
+                  className="button danger"
+                  onClick={() => deleteItem("questions", editingQuestionId, "Question deleted.")}
+                  type="button"
+                >
+                  Delete question
+                </button>
+              </div>
+            </form>
+          )}
         </div>
       )}
     </div>
