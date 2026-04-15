@@ -149,6 +149,10 @@ export default function AdminPanel() {
       .sort((a, b) => a.lectureTitle.localeCompare(b.lectureTitle));
   }, [questions]);
 
+  const lectureQuestions = useMemo(() => {
+    return questions.filter((question) => question.lecture_id === questionForm.lecture_id);
+  }, [questionForm.lecture_id, questions]);
+
   const reportLectureOptions = useMemo(() => {
     return Array.from(
       new Set(reports.map((report) => report.lectures?.title).filter(Boolean))
@@ -1104,10 +1108,13 @@ export default function AdminPanel() {
               required
               value={questionForm.lecture_id}
               onChange={(event) =>
-                setQuestionForm((current) => ({
-                  ...current,
-                  lecture_id: event.target.value
-                }))
+                {
+                  setEditingQuestionId(null);
+                  setQuestionForm((current) => ({
+                    ...emptyQuestion,
+                    lecture_id: event.target.value
+                  }));
+                }
               }
             >
               <option value="">Choose a lecture</option>
@@ -1120,6 +1127,39 @@ export default function AdminPanel() {
               ))}
             </select>
           </label>
+          {questionMode === "single" && questionForm.lecture_id && lectureQuestions.length > 0 && (
+            <label className="field">
+              <span>Select existing question</span>
+              <select
+                onChange={(event) => {
+                  if (!event.target.value) {
+                    cancelEditingQuestion();
+                    setQuestionForm((current) => ({
+                      ...emptyQuestion,
+                      lecture_id: questionForm.lecture_id
+                    }));
+                    return;
+                  }
+
+                  const selectedQuestion = lectureQuestions.find(
+                    (question) => question.id === event.target.value
+                  );
+
+                  if (selectedQuestion) {
+                    startEditingQuestion(selectedQuestion);
+                  }
+                }}
+                value={editingQuestionId || ""}
+              >
+                <option value="">Create a new question</option>
+                {lectureQuestions.map((question, index) => (
+                  <option key={question.id} value={question.id}>
+                    {index + 1}. {question.question_text}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
           {questionMode === "single" && (
             <>
           <label className="remember-row">
