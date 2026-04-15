@@ -747,6 +747,11 @@ export default function AdminPanel() {
     setStatus("Question editing cancelled.");
   }
 
+  function clearEditingQuestionOnly() {
+    setEditingQuestionId(null);
+    setQuestionForm(emptyQuestion);
+  }
+
   async function replyToReport(reportId) {
     setStatus("");
 
@@ -1482,7 +1487,7 @@ export default function AdminPanel() {
                 <span>Stage</span>
                 <select
                   onChange={(event) => {
-                    cancelEditingQuestion();
+                    clearEditingQuestionOnly();
                     setEditQuestionPath({
                       stage: event.target.value,
                       block: "",
@@ -1507,7 +1512,7 @@ export default function AdminPanel() {
                 <select
                   disabled={!editQuestionPath.stage}
                   onChange={(event) => {
-                    cancelEditingQuestion();
+                    clearEditingQuestionOnly();
                     setEditQuestionPath((current) => ({
                       ...current,
                       block: event.target.value,
@@ -1532,7 +1537,7 @@ export default function AdminPanel() {
                 <select
                   disabled={!editQuestionPath.block}
                   onChange={(event) => {
-                    cancelEditingQuestion();
+                    clearEditingQuestionOnly();
                     setEditQuestionPath((current) => ({
                       ...current,
                       module_name: event.target.value,
@@ -1556,7 +1561,7 @@ export default function AdminPanel() {
                 <select
                   disabled={!editQuestionPath.module_name}
                   onChange={(event) => {
-                    cancelEditingQuestion();
+                    clearEditingQuestionOnly();
                     setEditQuestionPath((current) => ({
                       ...current,
                       lecture_id: event.target.value,
