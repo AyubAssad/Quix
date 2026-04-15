@@ -232,6 +232,17 @@ select {
   gap: 18px;
 }
 
+.action-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+}
+
+.action-row p {
+  margin: 4px 0 0;
+}
+
 .field {
   display: grid;
   gap: 10px;

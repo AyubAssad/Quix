@@ -38,6 +38,7 @@ export default function AdminPanel() {
     name: ""
   });
   const [lectures, setLectures] = useState([]);
+  const [questions, setQuestions] = useState([]);
   const [lectureForm, setLectureForm] = useState(emptyLecture);
   const [questionForm, setQuestionForm] = useState(emptyQuestion);
   const [questionMode, setQuestionMode] = useState("single");
@@ -128,7 +129,8 @@ export default function AdminPanel() {
         loadStages(),
         loadBlocks(),
         loadModules(),
-        loadLectures()
+        loadLectures(),
+        loadQuestions()
       ]);
     }
 
@@ -188,6 +190,19 @@ export default function AdminPanel() {
       .order("created_at", { ascending: true });
 
     setLectures(data ?? []);
+  }
+
+  async function loadQuestions() {
+    if (!supabase) {
+      return;
+    }
+
+    const { data } = await supabase
+      .from("questions")
+      .select("id, lecture_id, question_type, question_text, correct_option, lectures(title)")
+      .order("created_at", { ascending: true });
+
+    setQuestions(data ?? []);
   }
 
   async function createStage(event) {
@@ -353,6 +368,7 @@ export default function AdminPanel() {
       lecture_id: current.lecture_id
     }));
     setStatus("Question added. You can keep adding more questions for this lecture.");
+    loadQuestions();
   }
 
   async function createBulkQuestions(event) {
@@ -448,6 +464,41 @@ export default function AdminPanel() {
 
     setBulkQuestionsText("");
     setStatus(`${payload.length} questions added successfully.`);
+    loadQuestions();
+  }
+
+  async function deleteItem(table, id, successMessage) {
+    setStatus("");
+
+    if (!supabase) {
+      setStatus("Add your Supabase URL and anon key in .env.local first.");
+      return;
+    }
+
+    const { error } = await supabase.from(table).delete().eq("id", id);
+    if (error) {
+      setStatus(error.message);
+      return;
+    }
+
+    setStatus(successMessage);
+
+    if (table === "stages") {
+      loadStages();
+    }
+    if (table === "blocks") {
+      loadBlocks();
+    }
+    if (table === "modules") {
+      loadModules();
+    }
+    if (table === "lectures") {
+      loadLectures();
+      loadQuestions();
+    }
+    if (table === "questions") {
+      loadQuestions();
+    }
   }
 
   if (!ready) {
@@ -513,61 +564,103 @@ export default function AdminPanel() {
       </div>
 
       {adminView === "stage" && (
-        <form className="card stack" onSubmit={createStage}>
-          <h2 className="section-title">Add stage</h2>
-          <label className="field">
-            <span>Stage name</span>
-            <input
-              required
-              value={stageName}
-              onChange={(event) => setStageName(event.target.value)}
-              placeholder="Stage 1"
-            />
-          </label>
-          <button className="button" type="submit">
-            Save stage
-          </button>
-        </form>
+        <div className="stack">
+          <form className="card stack" onSubmit={createStage}>
+            <h2 className="section-title">Add stage</h2>
+            <label className="field">
+              <span>Stage name</span>
+              <input
+                required
+                value={stageName}
+                onChange={(event) => setStageName(event.target.value)}
+                placeholder="Stage 1"
+              />
+            </label>
+            <button className="button" type="submit">
+              Save stage
+            </button>
+          </form>
+
+          <div className="card stack">
+            <h2 className="section-title">Existing stages</h2>
+            {stages.length === 0 && <p className="muted">No stages yet.</p>}
+            {stages.map((stage) => (
+              <div className="panel action-row" key={stage.id}>
+                <strong>{stage.name}</strong>
+                <button
+                  className="button danger"
+                  onClick={() => deleteItem("stages", stage.id, "Stage deleted.")}
+                  type="button"
+                >
+                  Delete
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
       )}
 
       {adminView === "block" && (
-        <form className="card stack" onSubmit={createBlock}>
-          <h2 className="section-title">Add block</h2>
-          <label className="field">
-            <span>Stage</span>
-            <select
-              required
-              value={blockForm.stage_name}
-              onChange={(event) =>
-                setBlockForm((current) => ({ ...current, stage_name: event.target.value }))
-              }
-            >
-              <option value="">Choose stage</option>
-              {stageOptions.map((stage) => (
-                <option key={stage} value={stage}>
-                  {stage}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="field">
-            <span>Block name</span>
-            <input
-              required
-              value={blockForm.name}
-              onChange={(event) =>
-                setBlockForm((current) => ({ ...current, name: event.target.value }))
-              }
-              placeholder="Block A"
-            />
-          </label>
-          <button className="button" type="submit">
-            Save block
-          </button>
-        </form>
+        <div className="stack">
+          <form className="card stack" onSubmit={createBlock}>
+            <h2 className="section-title">Add block</h2>
+            <label className="field">
+              <span>Stage</span>
+              <select
+                required
+                value={blockForm.stage_name}
+                onChange={(event) =>
+                  setBlockForm((current) => ({ ...current, stage_name: event.target.value }))
+                }
+              >
+                <option value="">Choose stage</option>
+                {stageOptions.map((stage) => (
+                  <option key={stage} value={stage}>
+                    {stage}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="field">
+              <span>Block name</span>
+              <input
+                required
+                value={blockForm.name}
+                onChange={(event) =>
+                  setBlockForm((current) => ({ ...current, name: event.target.value }))
+                }
+                placeholder="Block A"
+              />
+            </label>
+            <button className="button" type="submit">
+              Save block
+            </button>
+          </form>
+
+          <div className="card stack">
+            <h2 className="section-title">Existing blocks</h2>
+            {blocks.length === 0 && <p className="muted">No blocks yet.</p>}
+            {blocks.map((block) => (
+              <div className="panel action-row" key={block.id}>
+                <div>
+                  <strong>{block.name}</strong>
+                  <p className="muted">{block.stage_name}</p>
+                </div>
+                <button
+                  className="button danger"
+                  onClick={() => deleteItem("blocks", block.id, "Block deleted.")}
+                  type="button"
+                >
+                  Delete
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
       )}
 
       {adminView === "module" && (
+        <div className="stack">
         <form className="card stack" onSubmit={createModule}>
           <h2 className="section-title">Add module</h2>
           <label className="field">
@@ -624,9 +717,32 @@ export default function AdminPanel() {
             Save module
           </button>
         </form>
+        <div className="card stack">
+          <h2 className="section-title">Existing modules</h2>
+          {modules.length === 0 && <p className="muted">No modules yet.</p>}
+          {modules.map((moduleItem) => (
+            <div className="panel action-row" key={moduleItem.id}>
+              <div>
+                <strong>{moduleItem.name}</strong>
+                <p className="muted">
+                  {moduleItem.stage_name} / {moduleItem.block_name}
+                </p>
+              </div>
+              <button
+                className="button danger"
+                onClick={() => deleteItem("modules", moduleItem.id, "Module deleted.")}
+                type="button"
+              >
+                Delete
+              </button>
+            </div>
+          ))}
+        </div>
+        </div>
       )}
 
       {adminView === "lecture" && (
+        <div className="stack">
         <form className="card stack" onSubmit={createLecture}>
           <h2 className="section-title">Add lecture</h2>
           <label className="field">
@@ -721,9 +837,32 @@ export default function AdminPanel() {
             Save lecture
           </button>
         </form>
+        <div className="card stack">
+          <h2 className="section-title">Existing lectures</h2>
+          {lectures.length === 0 && <p className="muted">No lectures yet.</p>}
+          {lectures.map((lecture) => (
+            <div className="panel action-row" key={lecture.id}>
+              <div>
+                <strong>{lecture.title}</strong>
+                <p className="muted">
+                  {[lecture.stage, lecture.block, lecture.module_name].filter(Boolean).join(" / ")}
+                </p>
+              </div>
+              <button
+                className="button danger"
+                onClick={() => deleteItem("lectures", lecture.id, "Lecture deleted.")}
+                type="button"
+              >
+                Delete
+              </button>
+            </div>
+          ))}
+        </div>
+        </div>
       )}
 
       {adminView === "question" && (
+        <div className="stack">
         <form className="card stack" onSubmit={createQuestion}>
           <h2 className="section-title">Add question</h2>
           <div className="nav-links">
@@ -927,6 +1066,28 @@ export default function AdminPanel() {
             </>
           )}
         </form>
+        <div className="card stack">
+          <h2 className="section-title">Existing questions</h2>
+          {questions.length === 0 && <p className="muted">No questions yet.</p>}
+          {questions.map((question) => (
+            <div className="panel action-row" key={question.id}>
+              <div>
+                <strong>{question.question_text}</strong>
+                <p className="muted">
+                  {(question.lectures && question.lectures.title) || "Lecture"} / {question.question_type}
+                </p>
+              </div>
+              <button
+                className="button danger"
+                onClick={() => deleteItem("questions", question.id, "Question deleted.")}
+                type="button"
+              >
+                Delete
+              </button>
+            </div>
+          ))}
+        </div>
+        </div>
       )}
     </div>
   );
