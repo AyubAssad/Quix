@@ -526,13 +526,6 @@ export default function AdminPanel() {
         <h2 className="section-title">Admin options</h2>
         <div className="nav-links">
           <button
-            className={`button ${adminView === "stage" ? "" : "secondary"}`}
-            onClick={() => setAdminView("stage")}
-            type="button"
-          >
-            Add stage
-          </button>
-          <button
             className={`button ${adminView === "lecture" ? "" : "secondary"}`}
             onClick={() => setAdminView("lecture")}
             type="button"
@@ -540,11 +533,11 @@ export default function AdminPanel() {
             Add lecture
           </button>
           <button
-            className={`button ${adminView === "block" ? "" : "secondary"}`}
-            onClick={() => setAdminView("block")}
+            className={`button ${adminView === "question" ? "" : "secondary"}`}
+            onClick={() => setAdminView("question")}
             type="button"
           >
-            Add block
+            Add question
           </button>
           <button
             className={`button ${adminView === "module" ? "" : "secondary"}`}
@@ -554,11 +547,18 @@ export default function AdminPanel() {
             Add module
           </button>
           <button
-            className={`button ${adminView === "question" ? "" : "secondary"}`}
-            onClick={() => setAdminView("question")}
+            className={`button ${adminView === "block" ? "" : "secondary"}`}
+            onClick={() => setAdminView("block")}
             type="button"
           >
-            Add question
+            Add block
+          </button>
+          <button
+            className={`button ${adminView === "stage" ? "" : "secondary"}`}
+            onClick={() => setAdminView("stage")}
+            type="button"
+          >
+            Add stage
           </button>
         </div>
       </div>
