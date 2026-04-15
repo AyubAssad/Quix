@@ -701,9 +701,24 @@ export default function AdminPanel() {
       };
     });
 
-    const { error } = await supabase.from("questions").upsert(updates);
-    if (error) {
-      setStatus(error.message);
+    const results = await Promise.all(
+      updates.map((update) =>
+        supabase
+          .from("questions")
+          .update({
+            option_a: update.option_a,
+            option_b: update.option_b,
+            option_c: update.option_c,
+            option_d: update.option_d,
+            correct_option: update.correct_option
+          })
+          .eq("id", update.id)
+      )
+    );
+
+    const failedResult = results.find((result) => result.error);
+    if (failedResult?.error) {
+      setStatus(failedResult.error.message);
       return;
     }
 
