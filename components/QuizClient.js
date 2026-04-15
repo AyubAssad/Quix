@@ -5,6 +5,7 @@ import { supabase } from "@/lib/supabase";
 
 export default function QuizClient({ lectureId, lectureTitle }) {
   const [user, setUser] = useState(null);
+  const [allQuestions, setAllQuestions] = useState([]);
   const [questions, setQuestions] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [checkedAnswers, setCheckedAnswers] = useState({});
@@ -55,6 +56,7 @@ export default function QuizClient({ lectureId, lectureTitle }) {
       return;
     }
 
+    setAllQuestions(data ?? []);
     setQuestions(data ?? []);
     if (currentUser) {
       const { data: reportData } = await supabase
@@ -78,6 +80,13 @@ export default function QuizClient({ lectureId, lectureTitle }) {
   const currentQuestion = questions[currentIndex];
   const currentAnswer = currentQuestion ? checkedAnswers[currentQuestion.id] : null;
   const currentReport = currentQuestion ? reportsByQuestion[currentQuestion.id] : null;
+  const incorrectQuestions = useMemo(() => {
+    return questions.filter((question) => checkedAnswers[question.id] && !checkedAnswers[question.id].is_correct);
+  }, [checkedAnswers, questions]);
+  const finishedQuiz =
+    questions.length > 0 &&
+    currentIndex === questions.length - 1 &&
+    Boolean(currentAnswer);
   const totalEarned = useMemo(() => {
     return Object.values(checkedAnswers).reduce(
       (sum, item) => sum + (item?.points_awarded ?? 0),
@@ -165,6 +174,26 @@ export default function QuizClient({ lectureId, lectureTitle }) {
       setCurrentIndex((current) => current - 1);
       setStatus("");
     }
+  }
+
+  function repeatIncorrectQuestions() {
+    if (incorrectQuestions.length === 0) {
+      return;
+    }
+
+    setQuestions(incorrectQuestions);
+    setCheckedAnswers({});
+    setCurrentIndex(0);
+    setSelectedOption("");
+    setStatus("");
+  }
+
+  function restartFullQuiz() {
+    setQuestions(allQuestions);
+    setCheckedAnswers({});
+    setCurrentIndex(0);
+    setSelectedOption("");
+    setStatus("");
   }
 
   async function submitReport() {
@@ -344,9 +373,29 @@ export default function QuizClient({ lectureId, lectureTitle }) {
           </button>
         </div>
 
-        {currentIndex === questions.length - 1 && currentAnswer && (
-          <div className="message">
-            Quiz complete for {lectureTitle}. You earned {totalEarned} points.
+        {finishedQuiz && (
+          <div className="stack">
+            <div className="message">
+              Quiz complete for {lectureTitle}. You earned {totalEarned} points.
+            </div>
+            <div className="quiz-nav">
+              <button
+                className="button secondary"
+                disabled={incorrectQuestions.length === 0}
+                onClick={repeatIncorrectQuestions}
+                type="button"
+              >
+                Repeat incorrect questions
+              </button>
+              <a className="button" href="/home">
+                Return to home
+              </a>
+            </div>
+            {questions.length !== allQuestions.length && (
+              <button className="button secondary" onClick={restartFullQuiz} type="button">
+                Restart full quiz
+              </button>
+            )}
           </div>
         )}
 

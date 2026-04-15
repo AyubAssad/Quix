@@ -22,6 +22,31 @@ const emptyQuestion = {
   correct_option: "a"
 };
 
+function shuffleArray(items) {
+  const copy = [...items];
+
+  for (let index = copy.length - 1; index > 0; index -= 1) {
+    const randomIndex = Math.floor(Math.random() * (index + 1));
+    [copy[index], copy[randomIndex]] = [copy[randomIndex], copy[index]];
+  }
+
+  return copy;
+}
+
+function buildShuffledQuestionOptions(questionType, options, correctOption) {
+  const letters = ["a", "b", "c", "d"];
+  const shuffled = shuffleArray(options);
+  const nextCorrectIndex = shuffled.findIndex((option) => option.isCorrect);
+
+  return {
+    option_a: shuffled[0]?.label ?? null,
+    option_b: shuffled[1]?.label ?? null,
+    option_c: questionType === "true_false" ? null : shuffled[2]?.label ?? null,
+    option_d: questionType === "true_false" ? null : shuffled[3]?.label ?? null,
+    correct_option: letters[nextCorrectIndex] ?? correctOption
+  };
+}
+
 export default function AdminPanel() {
   const [allowed, setAllowed] = useState(false);
   const [ready, setReady] = useState(false);
@@ -45,9 +70,11 @@ export default function AdminPanel() {
   const [reportStatusFilter, setReportStatusFilter] = useState("all");
   const [lectureForm, setLectureForm] = useState(emptyLecture);
   const [questionForm, setQuestionForm] = useState(emptyQuestion);
+  const [editingQuestionId, setEditingQuestionId] = useState(null);
   const [questionMode, setQuestionMode] = useState("single");
   const [bulkQuestionType, setBulkQuestionType] = useState("mcq");
   const [bulkQuestionsText, setBulkQuestionsText] = useState("");
+  const [shuffleAnswers, setShuffleAnswers] = useState(true);
 
   const stageOptions = useMemo(() => {
     const allStages = [
@@ -236,7 +263,9 @@ export default function AdminPanel() {
 
     const { data } = await supabase
       .from("questions")
-      .select("id, lecture_id, question_type, question_text, correct_option, lectures(title)")
+      .select(
+        "id, lecture_id, question_type, question_text, option_a, option_b, option_c, option_d, correct_option, lectures(title)"
+      )
       .order("created_at", { ascending: true });
 
     setQuestions(data ?? []);
@@ -390,15 +419,40 @@ export default function AdminPanel() {
     }
 
     const isTrueFalse = questionForm.question_type === "true_false";
+    const baseOptions = isTrueFalse
+      ? [
+          { label: "True", isCorrect: questionForm.correct_option === "a" },
+          { label: "False", isCorrect: questionForm.correct_option === "b" }
+        ]
+      : [
+          { label: questionForm.option_a.trim(), isCorrect: questionForm.correct_option === "a" },
+          { label: questionForm.option_b.trim(), isCorrect: questionForm.correct_option === "b" },
+          { label: questionForm.option_c.trim(), isCorrect: questionForm.correct_option === "c" },
+          { label: questionForm.option_d.trim(), isCorrect: questionForm.correct_option === "d" }
+        ];
+    const questionOptions = shuffleAnswers
+      ? buildShuffledQuestionOptions(
+          questionForm.question_type,
+          baseOptions,
+          questionForm.correct_option
+        )
+      : {
+          option_a: baseOptions[0]?.label ?? null,
+          option_b: baseOptions[1]?.label ?? null,
+          option_c: isTrueFalse ? null : baseOptions[2]?.label ?? null,
+          option_d: isTrueFalse ? null : baseOptions[3]?.label ?? null,
+          correct_option: questionForm.correct_option
+        };
+
     const payload = {
       lecture_id: questionForm.lecture_id,
       question_type: questionForm.question_type,
       question_text: questionForm.question_text.trim(),
-      option_a: isTrueFalse ? "True" : questionForm.option_a.trim(),
-      option_b: isTrueFalse ? "False" : questionForm.option_b.trim(),
-      option_c: isTrueFalse ? null : questionForm.option_c.trim() || null,
-      option_d: isTrueFalse ? null : questionForm.option_d.trim() || null,
-      correct_option: questionForm.correct_option,
+      option_a: questionOptions.option_a,
+      option_b: questionOptions.option_b,
+      option_c: questionOptions.option_c,
+      option_d: questionOptions.option_d,
+      correct_option: questionOptions.correct_option,
       points: 1
     };
 
@@ -412,7 +466,11 @@ export default function AdminPanel() {
       return;
     }
 
-    const { error } = await supabase.from("questions").insert(payload);
+    const query = editingQuestionId
+      ? supabase.from("questions").update(payload).eq("id", editingQuestionId)
+      : supabase.from("questions").insert(payload);
+
+    const { error } = await query;
     if (error) {
       setStatus(error.message);
       return;
@@ -422,7 +480,12 @@ export default function AdminPanel() {
       ...emptyQuestion,
       lecture_id: current.lecture_id
     }));
-    setStatus("Question added. You can keep adding more questions for this lecture.");
+    setEditingQuestionId(null);
+    setStatus(
+      editingQuestionId
+        ? "Question updated."
+        : "Question added. You can keep adding more questions for this lecture."
+    );
     loadQuestions();
   }
 
@@ -472,15 +535,30 @@ export default function AdminPanel() {
           return;
         }
 
+        const mcqOptions = shuffleAnswers
+          ? buildShuffledQuestionOptions(
+              "mcq",
+              [
+                { label: lines[1], isCorrect: correctOption === "a" },
+                { label: lines[2], isCorrect: correctOption === "b" },
+                { label: lines[3], isCorrect: correctOption === "c" },
+                { label: lines[4], isCorrect: correctOption === "d" }
+              ],
+              correctOption
+            )
+          : {
+              option_a: lines[1],
+              option_b: lines[2],
+              option_c: lines[3],
+              option_d: lines[4],
+              correct_option: correctOption
+            };
+
         payload.push({
           lecture_id: questionForm.lecture_id,
           question_type: "mcq",
           question_text: lines[0],
-          option_a: lines[1],
-          option_b: lines[2],
-          option_c: lines[3],
-          option_d: lines[4],
-          correct_option: correctOption,
+          ...mcqOptions,
           points: 1
         });
       } else {
@@ -497,15 +575,28 @@ export default function AdminPanel() {
           return;
         }
 
+        const trueFalseOptions = shuffleAnswers
+          ? buildShuffledQuestionOptions(
+              "true_false",
+              [
+                { label: "True", isCorrect: correctValue === "true" },
+                { label: "False", isCorrect: correctValue === "false" }
+              ],
+              correctValue === "true" ? "a" : "b"
+            )
+          : {
+              option_a: "True",
+              option_b: "False",
+              option_c: null,
+              option_d: null,
+              correct_option: correctValue === "true" ? "a" : "b"
+            };
+
         payload.push({
           lecture_id: questionForm.lecture_id,
           question_type: "true_false",
           question_text: lines[0],
-          option_a: "True",
-          option_b: "False",
-          option_c: null,
-          option_d: null,
-          correct_option: correctValue === "true" ? "a" : "b",
+          ...trueFalseOptions,
           points: 1
         });
       }
@@ -552,11 +643,38 @@ export default function AdminPanel() {
       loadQuestions();
     }
     if (table === "questions") {
+      if (editingQuestionId === id) {
+        setEditingQuestionId(null);
+        setQuestionForm(emptyQuestion);
+      }
       loadQuestions();
     }
     if (table === "question_reports") {
       loadReports();
     }
+  }
+
+  function startEditingQuestion(question) {
+    setAdminView("question");
+    setQuestionMode("single");
+    setEditingQuestionId(question.id);
+    setQuestionForm({
+      lecture_id: question.lecture_id,
+      question_type: question.question_type,
+      question_text: question.question_text,
+      option_a: question.option_a || "",
+      option_b: question.option_b || "",
+      option_c: question.option_c || "",
+      option_d: question.option_d || "",
+      correct_option: question.correct_option
+    });
+    setStatus("Editing question. Update the fields, then save.");
+  }
+
+  function cancelEditingQuestion() {
+    setEditingQuestionId(null);
+    setQuestionForm(emptyQuestion);
+    setStatus("Question editing cancelled.");
   }
 
   async function replyToReport(reportId) {
@@ -954,9 +1072,18 @@ export default function AdminPanel() {
         <div className="stack">
         <form className="card stack" onSubmit={createQuestion}>
           <h2 className="section-title">Add question</h2>
+          {editingQuestionId && (
+            <div className="action-row">
+              <div className="message">Editing an existing question.</div>
+              <button className="button secondary" onClick={cancelEditingQuestion} type="button">
+                Cancel edit
+              </button>
+            </div>
+          )}
           <div className="nav-links">
             <button
               className={`button ${questionMode === "single" ? "" : "secondary"}`}
+              disabled={Boolean(editingQuestionId)}
               onClick={() => setQuestionMode("single")}
               type="button"
             >
@@ -964,6 +1091,7 @@ export default function AdminPanel() {
             </button>
             <button
               className={`button ${questionMode === "bulk" ? "" : "secondary"}`}
+              disabled={Boolean(editingQuestionId)}
               onClick={() => setQuestionMode("bulk")}
               type="button"
             >
@@ -994,6 +1122,14 @@ export default function AdminPanel() {
           </label>
           {questionMode === "single" && (
             <>
+          <label className="remember-row">
+            <input
+              checked={shuffleAnswers}
+              onChange={(event) => setShuffleAnswers(event.target.checked)}
+              type="checkbox"
+            />
+            <span>Shuffle answer positions automatically</span>
+          </label>
           <label className="field">
             <span>Question type</span>
             <select
@@ -1115,12 +1251,20 @@ export default function AdminPanel() {
           <div className="message">Each question is worth 1 point.</div>
 
           <button className="button" type="submit">
-            Save question
+            {editingQuestionId ? "Update question" : "Save question"}
           </button>
             </>
           )}
           {questionMode === "bulk" && (
             <>
+              <label className="remember-row">
+                <input
+                  checked={shuffleAnswers}
+                  onChange={(event) => setShuffleAnswers(event.target.checked)}
+                  type="checkbox"
+                />
+                <span>Shuffle answer positions automatically</span>
+              </label>
               <label className="field">
                 <span>Bulk question type</span>
                 <select
@@ -1164,6 +1308,37 @@ export default function AdminPanel() {
                 <strong>{item.lectureTitle}</strong>
                 <p className="muted">{item.count} questions</p>
               </div>
+            </div>
+          ))}
+        </div>
+        <div className="card stack">
+          <h2 className="section-title">Question bank</h2>
+          {questions.length === 0 && <p className="muted">No questions yet.</p>}
+          {questions.map((question) => (
+            <div className="panel stack" key={question.id}>
+              <div className="action-row">
+                <div>
+                  <strong>{question.lectures?.title || "Lecture"}</strong>
+                  <p className="muted">{question.question_type}</p>
+                </div>
+                <div className="nav-links">
+                  <button
+                    className="button secondary"
+                    onClick={() => startEditingQuestion(question)}
+                    type="button"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    className="button danger"
+                    onClick={() => deleteItem("questions", question.id, "Question deleted.")}
+                    type="button"
+                  >
+                    Delete
+                  </button>
+                </div>
+              </div>
+              <p className="muted">{question.question_text}</p>
             </div>
           ))}
         </div>
