@@ -40,12 +40,9 @@ export default function Leaderboard() {
       <div className="list">
         {profiles.map((profile, index) => (
           <div className="leader-row" key={profile.id}>
-            <div>
-              <strong>
-                #{index + 1} {profile.full_name || profile.email}
-              </strong>
-              <div className="muted">{profile.email}</div>
-            </div>
+            <strong>
+              #{index + 1} {profile.full_name || "Student"}
+            </strong>
             <strong>{profile.total_points || 0} pts</strong>
           </div>
         ))}
