@@ -79,12 +79,18 @@ select {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 42px;
-  height: 42px;
-  border-radius: 14px;
-  background: linear-gradient(180deg, #4fbfba 0%, #2b8f90 100%);
-  color: #05110f;
-  box-shadow: 0 12px 28px rgba(87, 183, 179, 0.22);
+  width: 52px;
+  height: 52px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.96);
+  padding: 4px;
+  box-shadow: 0 12px 28px rgba(214, 31, 38, 0.18);
+}
+
+.brand-mark img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
 }
 
 .hero {

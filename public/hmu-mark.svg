@@ -1,0 +1,19 @@
+<svg width="220" height="220" viewBox="0 0 220 220" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect x="6" y="56" width="208" height="148" rx="26" stroke="#D61F26" stroke-width="4"/>
+  <path d="M34 176H186" stroke="#D61F26" stroke-width="4" stroke-linecap="round"/>
+  <path d="M48 160H172" stroke="#D61F26" stroke-width="3" stroke-linecap="round"/>
+  <path d="M58 146H162" stroke="#D61F26" stroke-width="3" stroke-linecap="round"/>
+  <path d="M70 132H150" stroke="#D61F26" stroke-width="3" stroke-linecap="round"/>
+  <path d="M82 118H138" stroke="#D61F26" stroke-width="3" stroke-linecap="round"/>
+  <path d="M108 64V136" stroke="#D61F26" stroke-width="4" stroke-linecap="round"/>
+  <path d="M115 73C115 66.3726 120.373 61 127 61C133.627 61 139 66.3726 139 73V75C139 81.6274 133.627 87 127 87H120" stroke="#D61F26" stroke-width="4" stroke-linecap="round"/>
+  <path d="M127 87V116" stroke="#D61F26" stroke-width="4" stroke-linecap="round"/>
+  <path d="M121 99H133" stroke="#D61F26" stroke-width="4" stroke-linecap="round"/>
+  <path d="M90 76C79 76 72 86 72 95C80 94 85 98 89 104C90 92 98 84 106 79C101 77 96 76 90 76Z" stroke="#D61F26" stroke-width="3" stroke-linejoin="round"/>
+  <path d="M91 76C100 73 105 66 106 58C96 60 88 66 84 74" stroke="#D61F26" stroke-width="3" stroke-linecap="round"/>
+  <path d="M88 92C80 86 70 84 61 86C67 95 77 100 87 101" stroke="#D61F26" stroke-width="3" stroke-linecap="round"/>
+  <path d="M94 101C99 94 106 91 114 90" stroke="#D61F26" stroke-width="3" stroke-linecap="round"/>
+  <path d="M28 44C58 22 84 14 110 14C136 14 162 22 192 44" stroke="#D61F26" stroke-width="4" stroke-linecap="round"/>
+  <text x="110" y="194" text-anchor="middle" fill="#D61F26" font-family="Arial, sans-serif" font-size="18" font-weight="700">HAWLER MEDICAL</text>
+  <text x="110" y="212" text-anchor="middle" fill="#D61F26" font-family="Arial, sans-serif" font-size="18" font-weight="700">UNIVERSITY</text>
+</svg>

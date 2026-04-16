@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { useEffect, useState } from "react";
 import { Home, LayoutGrid, LogIn, LogOut, Shield, Trophy, UserPlus } from "lucide-react";
 import { supabase } from "@/lib/supabase";
@@ -45,7 +46,15 @@ export default function AppShell({ children }) {
     <div className="page-shell">
       <nav className="nav">
         <Link className="brand" href="/">
-          <span className="brand-mark">Q</span>
+          <span className="brand-mark">
+            <Image
+              alt="Hawler Medical University"
+              height={48}
+              priority
+              src="/hmu.logo.png"
+              width={48}
+            />
+          </span>
           <span>Quix</span>
         </Link>
 
