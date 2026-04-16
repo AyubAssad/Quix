@@ -4,6 +4,10 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
 
+function normalizeContentType(value) {
+  return value === "past_paper" ? "past_paper" : "quiz";
+}
+
 export default function LectureList() {
   const [activeSection, setActiveSection] = useState("quizzes");
   const [stages, setStages] = useState([]);
@@ -34,7 +38,7 @@ export default function LectureList() {
     ] = await Promise.all([
       supabase
         .from("lectures")
-        .select("id, stage, block, module_name, title, description")
+        .select("id, content_type, stage, block, module_name, title, description")
         .order("created_at", { ascending: true }),
       supabase.from("stages").select("id, name").order("name", { ascending: true }),
       supabase
@@ -60,14 +64,22 @@ export default function LectureList() {
     setLoading(false);
   }
 
+  const currentContentType = activeSection === "past_paper" ? "past_paper" : "quiz";
+
+  const filteredLectures = useMemo(() => {
+    return lectures.filter(
+      (lecture) => normalizeContentType(lecture.content_type) === currentContentType
+    );
+  }, [currentContentType, lectures]);
+
   const stageOptions = useMemo(() => {
     return Array.from(
       new Set([
         ...stages.map((stage) => stage.name).filter(Boolean),
-        ...lectures.map((lecture) => lecture.stage).filter(Boolean)
+        ...filteredLectures.map((lecture) => lecture.stage).filter(Boolean)
       ])
     ).sort();
-  }, [lectures, stages]);
+  }, [filteredLectures, stages]);
 
   const blockOptions = useMemo(() => {
     return Array.from(
@@ -77,14 +89,14 @@ export default function LectureList() {
             .filter((block) => block.stage_name === selectedStage)
             .map((block) => block.name)
             .filter(Boolean),
-          ...lectures
+          ...filteredLectures
             .filter((lecture) => lecture.stage === selectedStage)
             .map((lecture) => lecture.block)
             .filter(Boolean)
         ]
       )
     ).sort();
-  }, [blocks, lectures, selectedStage]);
+  }, [blocks, filteredLectures, selectedStage]);
 
   const moduleOptions = useMemo(() => {
     return Array.from(
@@ -98,7 +110,7 @@ export default function LectureList() {
             )
             .map((moduleItem) => moduleItem.name)
             .filter(Boolean),
-          ...lectures
+          ...filteredLectures
             .filter(
               (lecture) =>
                 lecture.stage === selectedStage && lecture.block === selectedBlock
@@ -108,50 +120,54 @@ export default function LectureList() {
         ]
       )
     ).sort();
-  }, [lectures, modules, selectedStage, selectedBlock]);
+  }, [filteredLectures, modules, selectedStage, selectedBlock]);
 
   const visibleLectures = useMemo(() => {
-    return lectures.filter(
+    return filteredLectures.filter(
       (lecture) =>
         lecture.stage === selectedStage &&
         lecture.block === selectedBlock &&
         lecture.module_name === selectedModule
     );
-  }, [lectures, selectedStage, selectedBlock, selectedModule]);
+  }, [filteredLectures, selectedStage, selectedBlock, selectedModule]);
 
   const selectedLecture = useMemo(() => {
     return visibleLectures.find((lecture) => lecture.id === selectedLectureId) ?? null;
-  }, [visibleLectures, selectedLectureId]);
-
-  const isPastPaper = activeSection === "past_paper";
-  const currentStageOptions = isPastPaper ? [] : stageOptions;
-  const currentBlockOptions = isPastPaper ? [] : blockOptions;
-  const currentModuleOptions = isPastPaper ? [] : moduleOptions;
-  const currentVisibleLectures = isPastPaper ? [] : visibleLectures;
-  const currentSelectedLecture = isPastPaper ? null : selectedLecture;
+  }, [selectedLectureId, visibleLectures]);
 
   if (loading) {
-    return <div className="panel">Loading lectures...</div>;
+    return <div className="panel">Loading content...</div>;
   }
 
-  if (activeSection === "quizzes" && stageOptions.length === 0) {
+  if (stageOptions.length === 0) {
     return (
       <div className="panel">
         <p className="muted">
           {!supabase
-            ? "Add your Supabase keys in .env.local first, then your stages will show here."
-            : "No stages yet. Once the admin adds a stage, it will show here."}
+            ? "Add your Supabase keys in .env.local first, then your sections will show here."
+            : activeSection === "past_paper"
+              ? "No past paper path yet. Add a past paper from admin and it will show here."
+              : "No quiz path yet. Once the admin adds a lecture, it will show here."}
         </p>
       </div>
     );
   }
+
+  const isPastPaper = currentContentType === "past_paper";
+  const itemLabel = isPastPaper ? "Past paper" : "Lecture";
+  const actionLabel = isPastPaper ? "Start past paper" : "Start quiz";
+  const itemHref = selectedLecture
+    ? isPastPaper
+      ? `/past-papers/${selectedLecture.id}`
+      : `/lectures/${selectedLecture.id}`
+    : "#";
 
   return (
     <div className="stack">
       <div className="card">
         <h2 className="section-title">Choose your section</h2>
         <p className="muted">
-          Open quizzes for your normal lecture quizzes, or switch to past paper for the same path layout.
+          Open quizzes for lecture practice, or switch to past paper and solve the same way through stage, block, and module.
         </p>
         <div className="nav-links">
           <button
@@ -188,15 +204,13 @@ export default function LectureList() {
           {isPastPaper ? "Select your past paper path" : "Select your lecture path"}
         </h2>
         <p className="muted">
-          {isPastPaper
-            ? "Past paper uses the same structure, but no past paper data has been added yet."
-            : "Choose your stage, then block, then module from the dropdowns below."}
+          Choose your stage, then block, then module from the dropdowns below.
         </p>
         <div className="grid">
           <label className="field">
             <span>Stage</span>
             <select
-              disabled={isPastPaper || currentStageOptions.length === 0}
+              disabled={stageOptions.length === 0}
               onChange={(event) => {
                 setSelectedStage(event.target.value);
                 setSelectedBlock("");
@@ -205,8 +219,8 @@ export default function LectureList() {
               }}
               value={selectedStage}
             >
-              <option value="">{isPastPaper ? "No stage yet" : "Choose stage"}</option>
-              {currentStageOptions.map((stage) => (
+              <option value="">Choose stage</option>
+              {stageOptions.map((stage) => (
                 <option key={stage} value={stage}>
                   {stage}
                 </option>
@@ -217,7 +231,7 @@ export default function LectureList() {
           <label className="field">
             <span>Block</span>
             <select
-              disabled={isPastPaper || !selectedStage || currentBlockOptions.length === 0}
+              disabled={!selectedStage || blockOptions.length === 0}
               onChange={(event) => {
                 setSelectedBlock(event.target.value);
                 setSelectedModule("");
@@ -226,13 +240,9 @@ export default function LectureList() {
               value={selectedBlock}
             >
               <option value="">
-                {isPastPaper
-                  ? "No block yet"
-                  : !selectedStage
-                    ? "Choose stage first"
-                    : "Choose block"}
+                {!selectedStage ? "Choose stage first" : "Choose block"}
               </option>
-              {currentBlockOptions.map((block) => (
+              {blockOptions.map((block) => (
                 <option key={block} value={block}>
                   {block}
                 </option>
@@ -243,7 +253,7 @@ export default function LectureList() {
           <label className="field">
             <span>Module</span>
             <select
-              disabled={isPastPaper || !selectedBlock || currentModuleOptions.length === 0}
+              disabled={!selectedBlock || moduleOptions.length === 0}
               onChange={(event) => {
                 setSelectedModule(event.target.value);
                 setSelectedLectureId("");
@@ -251,13 +261,9 @@ export default function LectureList() {
               value={selectedModule}
             >
               <option value="">
-                {isPastPaper
-                  ? "No module yet"
-                  : !selectedBlock
-                    ? "Choose block first"
-                    : "Choose module"}
+                {!selectedBlock ? "Choose block first" : "Choose module"}
               </option>
-              {currentModuleOptions.map((moduleName) => (
+              {moduleOptions.map((moduleName) => (
                 <option key={moduleName} value={moduleName}>
                   {moduleName}
                 </option>
@@ -266,29 +272,26 @@ export default function LectureList() {
           </label>
         </div>
 
-        {!isPastPaper && selectedStage && currentBlockOptions.length === 0 && (
+        {selectedStage && blockOptions.length === 0 && (
           <p className="muted">No blocks yet in this stage.</p>
         )}
-        {!isPastPaper && selectedBlock && currentModuleOptions.length === 0 && (
+        {selectedBlock && moduleOptions.length === 0 && (
           <p className="muted">No modules yet in this block.</p>
-        )}
-        {isPastPaper && (
-          <p className="muted">Past paper is ready as a section, but no data has been added yet.</p>
         )}
       </div>
 
       {selectedModule && !isPastPaper && (
         <div className="card">
-          <h2 className="section-title">Open a lecture</h2>
+          <h2 className="section-title">Open a {itemLabel.toLowerCase()}</h2>
           <label className="field">
-            <span>Lecture</span>
+            <span>{itemLabel}</span>
             <select
-              disabled={currentVisibleLectures.length === 0}
+              disabled={visibleLectures.length === 0}
               onChange={(event) => setSelectedLectureId(event.target.value)}
               value={selectedLectureId}
             >
-              <option value="">Choose lecture</option>
-              {currentVisibleLectures.map((lecture) => (
+              <option value="">Choose {itemLabel.toLowerCase()}</option>
+              {visibleLectures.map((lecture) => (
                 <option key={lecture.id} value={lecture.id}>
                   {lecture.title}
                 </option>
@@ -296,18 +299,59 @@ export default function LectureList() {
             </select>
           </label>
 
-          {currentVisibleLectures.length === 0 && (
-            <p className="muted">No lectures were found in this module yet.</p>
+          {visibleLectures.length === 0 && (
+            <p className="muted">
+              {isPastPaper
+                ? "No past papers were found in this module yet."
+                : "No lectures were found in this module yet."}
+            </p>
           )}
 
-          {currentSelectedLecture && (
+          {selectedLecture && (
             <div className="panel">
-              <h3>{currentSelectedLecture.title}</h3>
+              <h3>{selectedLecture.title}</h3>
               <p className="muted">
-                {currentSelectedLecture.description || "No description yet."}
+                {selectedLecture.description || "No description yet."}
               </p>
-              <Link className="button" href={`/lectures/${currentSelectedLecture.id}`}>
-                Start quiz
+              <Link className="button" href={itemHref}>
+                {actionLabel}
+              </Link>
+            </div>
+          )}
+        </div>
+      )}
+
+      {selectedModule && isPastPaper && (
+        <div className="card">
+          <h2 className="section-title">Open a past paper</h2>
+          <label className="field">
+            <span>Past paper</span>
+            <select
+              disabled={visibleLectures.length === 0}
+              onChange={(event) => setSelectedLectureId(event.target.value)}
+              value={selectedLectureId}
+            >
+              <option value="">Choose past paper</option>
+              {visibleLectures.map((lecture) => (
+                <option key={lecture.id} value={lecture.id}>
+                  {lecture.title}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          {visibleLectures.length === 0 && (
+            <p className="muted">No past papers were found in this module yet.</p>
+          )}
+
+          {selectedLecture && (
+            <div className="panel">
+              <h3>{selectedLecture.title}</h3>
+              <p className="muted">
+                {selectedLecture.description || "No description yet."}
+              </p>
+              <Link className="button" href={itemHref}>
+                Start past paper
               </Link>
             </div>
           )}

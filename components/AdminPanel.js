@@ -61,6 +61,10 @@ function buildQuestionOptions(questionType, options, correctOption, shouldShuffl
   };
 }
 
+function normalizeContentType(value) {
+  return value === "past_paper" ? "past_paper" : "quiz";
+}
+
 export default function AdminPanel() {
   const [allowed, setAllowed] = useState(false);
   const [ready, setReady] = useState(false);
@@ -78,10 +82,6 @@ export default function AdminPanel() {
   });
   const [lectures, setLectures] = useState([]);
   const [questions, setQuestions] = useState([]);
-  const [reports, setReports] = useState([]);
-  const [reportReplies, setReportReplies] = useState({});
-  const [reportLectureFilter, setReportLectureFilter] = useState("");
-  const [reportStatusFilter, setReportStatusFilter] = useState("all");
   const [lectureForm, setLectureForm] = useState(emptyLecture);
   const [questionForm, setQuestionForm] = useState(emptyQuestion);
   const [editingQuestionId, setEditingQuestionId] = useState(null);
@@ -96,16 +96,55 @@ export default function AdminPanel() {
   const [bulkQuestionType, setBulkQuestionType] = useState("mcq");
   const [bulkQuestionsText, setBulkQuestionsText] = useState("");
   const [shuffleAnswers, setShuffleAnswers] = useState(true);
+  const [lectureSection, setLectureSection] = useState("quizzes");
   const [questionSection, setQuestionSection] = useState("quizzes");
+  const [editQuestionSection, setEditQuestionSection] = useState("quizzes");
+
+  const currentLectureContentType = lectureSection === "past_paper" ? "past_paper" : "quiz";
+  const currentQuestionContentType = questionSection === "past_paper" ? "past_paper" : "quiz";
+  const currentEditContentType = editQuestionSection === "past_paper" ? "past_paper" : "quiz";
+  const targetQuestionContentType = editingQuestionId
+    ? currentEditContentType
+    : currentQuestionContentType;
+
+  const filteredLectures = useMemo(() => {
+    return lectures.filter(
+      (lecture) => normalizeContentType(lecture.content_type) === currentLectureContentType
+    );
+  }, [currentLectureContentType, lectures]);
+
+  const filteredQuestionLectures = useMemo(() => {
+    return lectures.filter(
+      (lecture) => normalizeContentType(lecture.content_type) === currentQuestionContentType
+    );
+  }, [currentQuestionContentType, lectures]);
+
+  const filteredQuestions = useMemo(() => {
+    return questions.filter(
+      (question) => normalizeContentType(question.content_type) === currentQuestionContentType
+    );
+  }, [currentQuestionContentType, questions]);
+
+  const filteredEditLectures = useMemo(() => {
+    return lectures.filter(
+      (lecture) => normalizeContentType(lecture.content_type) === currentEditContentType
+    );
+  }, [currentEditContentType, lectures]);
+
+  const filteredEditQuestions = useMemo(() => {
+    return questions.filter(
+      (question) => normalizeContentType(question.content_type) === currentEditContentType
+    );
+  }, [currentEditContentType, questions]);
 
   const stageOptions = useMemo(() => {
     const allStages = [
       ...stages.map((stage) => stage.name).filter(Boolean),
-      ...lectures.map((lecture) => lecture.stage).filter(Boolean)
+      ...filteredLectures.map((lecture) => lecture.stage).filter(Boolean)
     ];
 
     return Array.from(new Set(allStages)).sort();
-  }, [lectures, stages]);
+  }, [filteredLectures, stages]);
 
   const blockOptions = useMemo(() => {
     const blockNames = [
@@ -113,14 +152,14 @@ export default function AdminPanel() {
         .filter((block) => block.stage_name === lectureForm.stage)
         .map((block) => block.name)
         .filter(Boolean),
-      ...lectures
+      ...filteredLectures
         .filter((lecture) => lecture.stage === lectureForm.stage)
         .map((lecture) => lecture.block)
         .filter(Boolean)
     ];
 
     return Array.from(new Set(blockNames)).sort();
-  }, [blocks, lectures, lectureForm.stage]);
+  }, [blocks, filteredLectures, lectureForm.stage]);
 
   const moduleOptions = useMemo(() => {
     const moduleNames = [
@@ -132,7 +171,7 @@ export default function AdminPanel() {
         )
         .map((moduleItem) => moduleItem.name)
         .filter(Boolean),
-      ...lectures
+      ...filteredLectures
         .filter(
           (lecture) =>
             lecture.stage === lectureForm.stage && lecture.block === lectureForm.block
@@ -142,7 +181,7 @@ export default function AdminPanel() {
     ];
 
     return Array.from(new Set(moduleNames)).sort();
-  }, [lectures, modules, lectureForm.stage, lectureForm.block]);
+  }, [filteredLectures, modules, lectureForm.stage, lectureForm.block]);
 
   const moduleBlockOptions = useMemo(() => {
     const blockNames = [
@@ -150,17 +189,17 @@ export default function AdminPanel() {
         .filter((block) => block.stage_name === moduleForm.stage_name)
         .map((block) => block.name)
         .filter(Boolean),
-      ...lectures
+      ...filteredLectures
         .filter((lecture) => lecture.stage === moduleForm.stage_name)
         .map((lecture) => lecture.block)
         .filter(Boolean)
     ];
 
     return Array.from(new Set(blockNames)).sort();
-  }, [blocks, lectures, moduleForm.stage_name]);
+  }, [blocks, filteredLectures, moduleForm.stage_name]);
 
   const questionSummary = useMemo(() => {
-    const counts = questions.reduce((map, question) => {
+    const counts = filteredQuestions.reduce((map, question) => {
       const lectureLabel = question.lectures?.title || "Unknown lecture";
       map[lectureLabel] = (map[lectureLabel] || 0) + 1;
       return map;
@@ -169,31 +208,29 @@ export default function AdminPanel() {
     return Object.entries(counts)
       .map(([lectureTitle, count]) => ({ lectureTitle, count }))
       .sort((a, b) => a.lectureTitle.localeCompare(b.lectureTitle));
-  }, [questions]);
-
-  const lectureQuestions = useMemo(() => {
-    return questions.filter((question) => question.lecture_id === questionForm.lecture_id);
-  }, [questionForm.lecture_id, questions]);
+  }, [filteredQuestions]);
 
   const editStageOptions = useMemo(() => {
-    return Array.from(new Set(lectures.map((lecture) => lecture.stage).filter(Boolean))).sort();
-  }, [lectures]);
+    return Array.from(
+      new Set(filteredEditLectures.map((lecture) => lecture.stage).filter(Boolean))
+    ).sort();
+  }, [filteredEditLectures]);
 
   const editBlockOptions = useMemo(() => {
     return Array.from(
       new Set(
-        lectures
+        filteredEditLectures
           .filter((lecture) => lecture.stage === editQuestionPath.stage)
           .map((lecture) => lecture.block)
           .filter(Boolean)
       )
     ).sort();
-  }, [editQuestionPath.stage, lectures]);
+  }, [editQuestionPath.stage, filteredEditLectures]);
 
   const editModuleOptions = useMemo(() => {
     return Array.from(
       new Set(
-        lectures
+        filteredEditLectures
           .filter(
             (lecture) =>
               lecture.stage === editQuestionPath.stage &&
@@ -203,40 +240,27 @@ export default function AdminPanel() {
           .filter(Boolean)
       )
     ).sort();
-  }, [editQuestionPath.block, editQuestionPath.stage, lectures]);
+  }, [editQuestionPath.block, editQuestionPath.stage, filteredEditLectures]);
 
   const editLectureOptions = useMemo(() => {
-    return lectures.filter(
+    return filteredEditLectures.filter(
       (lecture) =>
         lecture.stage === editQuestionPath.stage &&
         lecture.block === editQuestionPath.block &&
         lecture.module_name === editQuestionPath.module_name
     );
-  }, [editQuestionPath.block, editQuestionPath.module_name, editQuestionPath.stage, lectures]);
+  }, [
+    editQuestionPath.block,
+    editQuestionPath.module_name,
+    editQuestionPath.stage,
+    filteredEditLectures
+  ]);
 
   const editQuestionOptions = useMemo(() => {
-    return questions.filter((question) => question.lecture_id === editQuestionPath.lecture_id);
-  }, [editQuestionPath.lecture_id, questions]);
-
-  const reportLectureOptions = useMemo(() => {
-    return Array.from(
-      new Set(reports.map((report) => report.lectures?.title).filter(Boolean))
-    ).sort();
-  }, [reports]);
-
-  const filteredReports = useMemo(() => {
-    return reports.filter((report) => {
-      const matchesLecture =
-        !reportLectureFilter || report.lectures?.title === reportLectureFilter;
-      const isAnswered = Boolean(report.answered_at);
-      const matchesStatus =
-        reportStatusFilter === "all" ||
-        (reportStatusFilter === "answered" && isAnswered) ||
-        (reportStatusFilter === "unanswered" && !isAnswered);
-
-      return matchesLecture && matchesStatus;
-    });
-  }, [reportLectureFilter, reportStatusFilter, reports]);
+    return filteredEditQuestions.filter(
+      (question) => question.lecture_id === editQuestionPath.lecture_id
+    );
+  }, [editQuestionPath.lecture_id, filteredEditQuestions]);
 
   useEffect(() => {
     loadAdminPage();
@@ -262,8 +286,7 @@ export default function AdminPanel() {
         loadBlocks(),
         loadModules(),
         loadLectures(),
-        loadQuestions(),
-        loadReports()
+        loadQuestions()
       ]);
     }
 
@@ -319,7 +342,7 @@ export default function AdminPanel() {
 
     const { data } = await supabase
       .from("lectures")
-      .select("id, stage, block, module_name, title, description")
+      .select("id, content_type, stage, block, module_name, title, description")
       .order("created_at", { ascending: true });
 
     setLectures(data ?? []);
@@ -333,29 +356,11 @@ export default function AdminPanel() {
     const { data } = await supabase
       .from("questions")
       .select(
-        "id, lecture_id, question_type, question_text, option_a, option_b, option_c, option_d, correct_option, lectures(title)"
+        "id, lecture_id, content_type, question_type, question_text, option_a, option_b, option_c, option_d, correct_option, lectures(title, content_type)"
       )
       .order("created_at", { ascending: true });
 
     setQuestions(data ?? []);
-  }
-
-  async function loadReports() {
-    if (!supabase) {
-      return;
-    }
-
-    const { data } = await supabase
-      .from("question_reports")
-      .select(
-        "id, message, admin_reply, answered_at, created_at, questions(question_text), lectures(title), profiles(email)"
-      )
-      .order("created_at", { ascending: false });
-
-    setReports(data ?? []);
-    setReportReplies(
-      Object.fromEntries((data ?? []).map((report) => [report.id, report.admin_reply || ""]))
-    );
   }
 
   async function createStage(event) {
@@ -455,6 +460,7 @@ export default function AdminPanel() {
     }
 
     const lecturePayload = {
+      content_type: currentLectureContentType,
       stage: lectureForm.stage,
       block: lectureForm.block,
       module_name: lectureForm.module_name,
@@ -464,6 +470,15 @@ export default function AdminPanel() {
 
     if (!lecturePayload.stage || !lecturePayload.block || !lecturePayload.module_name) {
       setStatus("Please choose the stage, block, and module before saving.");
+      return;
+    }
+
+    if (!lecturePayload.title) {
+      setStatus(
+        currentLectureContentType === "past_paper"
+          ? "Please enter a past paper title."
+          : "Please enter a lecture title."
+      );
       return;
     }
 
@@ -508,6 +523,7 @@ export default function AdminPanel() {
 
     const payload = {
       lecture_id: questionForm.lecture_id,
+      content_type: targetQuestionContentType,
       question_type: questionForm.question_type,
       question_text: questionForm.question_text.trim(),
       option_a: questionOptions.option_a,
@@ -611,6 +627,7 @@ export default function AdminPanel() {
 
         payload.push({
           lecture_id: questionForm.lecture_id,
+          content_type: currentQuestionContentType,
           question_type: "mcq",
           question_text: lines[0],
           ...mcqOptions,
@@ -642,6 +659,7 @@ export default function AdminPanel() {
 
         payload.push({
           lecture_id: questionForm.lecture_id,
+          content_type: currentQuestionContentType,
           question_type: "true_false",
           question_text: lines[0],
           ...trueFalseOptions,
@@ -669,14 +687,14 @@ export default function AdminPanel() {
       return;
     }
 
-    const validQuestions = questions.filter((question) => Boolean(question.lecture_id));
+    const validQuestions = filteredQuestions.filter((question) => Boolean(question.lecture_id));
 
     if (validQuestions.length === 0) {
       setStatus("No existing questions to shuffle.");
       return;
     }
 
-    const skippedCount = questions.length - validQuestions.length;
+    const skippedCount = filteredQuestions.length - validQuestions.length;
 
     const updates = validQuestions.map((question) => {
       const isTrueFalse = question.question_type === "true_false";
@@ -767,15 +785,17 @@ export default function AdminPanel() {
       }
       loadQuestions();
     }
-    if (table === "question_reports") {
-      loadReports();
-    }
   }
 
   function startEditingQuestion(question) {
     const lecture = lectures.find((item) => item.id === question.lecture_id);
+    const nextSection =
+      normalizeContentType(question.content_type || lecture?.content_type) === "past_paper"
+        ? "past_paper"
+        : "quizzes";
 
     setAdminView("editQuestion");
+    setEditQuestionSection(nextSection);
     setQuestionMode("single");
     setEditingQuestionId(question.id);
     setEditQuestionPath({
@@ -814,37 +834,6 @@ export default function AdminPanel() {
   function clearEditingQuestionOnly() {
     setEditingQuestionId(null);
     setQuestionForm(emptyQuestion);
-  }
-
-  async function replyToReport(reportId) {
-    setStatus("");
-
-    if (!supabase) {
-      setStatus("Add your Supabase URL and anon key in .env.local first.");
-      return;
-    }
-
-    const reply = (reportReplies[reportId] || "").trim();
-    if (!reply) {
-      setStatus("Please write a reply before sending.");
-      return;
-    }
-
-    const { error } = await supabase
-      .from("question_reports")
-      .update({
-        admin_reply: reply,
-        answered_at: new Date().toISOString()
-      })
-      .eq("id", reportId);
-
-    if (error) {
-      setStatus(error.message);
-      return;
-    }
-
-    setStatus("Reply sent.");
-    loadReports();
   }
 
   if (!ready) {
@@ -1098,6 +1087,28 @@ export default function AdminPanel() {
         <div className="stack">
         <form className="card stack" onSubmit={createLecture}>
           <h2 className="section-title">Add lecture</h2>
+          <div className="nav-links">
+            <button
+              className={`button ${lectureSection === "quizzes" ? "" : "secondary"}`}
+              onClick={() => {
+                setLectureSection("quizzes");
+                setLectureForm(emptyLecture);
+              }}
+              type="button"
+            >
+              Quizzes
+            </button>
+            <button
+              className={`button ${lectureSection === "past_paper" ? "" : "secondary"}`}
+              onClick={() => {
+                setLectureSection("past_paper");
+                setLectureForm(emptyLecture);
+              }}
+              type="button"
+            >
+              Past paper
+            </button>
+          </div>
           <label className="field">
             <span>Stage</span>
             <select
@@ -1164,7 +1175,7 @@ export default function AdminPanel() {
             </select>
           </label>
           <label className="field">
-            <span>Lecture title</span>
+            <span>{lectureSection === "past_paper" ? "Past paper title" : "Lecture title"}</span>
             <input
               required
               value={lectureForm.title}
@@ -1187,13 +1198,19 @@ export default function AdminPanel() {
             />
           </label>
           <button className="button" type="submit">
-            Save lecture
+            {lectureSection === "past_paper" ? "Save past paper" : "Save lecture"}
           </button>
         </form>
         <div className="card stack">
-          <h2 className="section-title">Existing lectures</h2>
-          {lectures.length === 0 && <p className="muted">No lectures yet.</p>}
-          {lectures.map((lecture) => (
+          <h2 className="section-title">
+            {lectureSection === "past_paper" ? "Existing past papers" : "Existing lectures"}
+          </h2>
+          {filteredLectures.length === 0 && (
+            <p className="muted">
+              {lectureSection === "past_paper" ? "No past papers yet." : "No lectures yet."}
+            </p>
+          )}
+          {filteredLectures.map((lecture) => (
             <div className="panel action-row" key={lecture.id}>
               <div>
                 <strong>{lecture.title}</strong>
@@ -1221,26 +1238,31 @@ export default function AdminPanel() {
           <div className="nav-links">
             <button
               className={`button ${questionSection === "quizzes" ? "" : "secondary"}`}
-              onClick={() => setQuestionSection("quizzes")}
+              onClick={() => {
+                setQuestionSection("quizzes");
+                setQuestionMode("single");
+                setQuestionForm(emptyQuestion);
+                setBulkQuestionsText("");
+                setEditingQuestionId(null);
+              }}
               type="button"
             >
               Quizzes
             </button>
             <button
               className={`button ${questionSection === "past_paper" ? "" : "secondary"}`}
-              onClick={() => setQuestionSection("past_paper")}
+              onClick={() => {
+                setQuestionSection("past_paper");
+                setQuestionMode("single");
+                setQuestionForm(emptyQuestion);
+                setBulkQuestionsText("");
+                setEditingQuestionId(null);
+              }}
               type="button"
             >
               Past paper
             </button>
           </div>
-          {questionSection === "past_paper" && (
-            <div className="message">
-              Past paper has its own section now. The upload and question tools for it will be added next.
-            </div>
-          )}
-          {questionSection === "quizzes" && (
-            <>
           <div className="nav-links">
             <button
               className={`button ${questionMode === "single" ? "" : "secondary"}`}
@@ -1258,7 +1280,7 @@ export default function AdminPanel() {
             </button>
           </div>
           <label className="field">
-            <span>Lecture</span>
+            <span>{questionSection === "past_paper" ? "Past paper" : "Lecture"}</span>
             <select
               required
               value={questionForm.lecture_id}
@@ -1272,8 +1294,10 @@ export default function AdminPanel() {
                 }
               }
             >
-              <option value="">Choose a lecture</option>
-              {lectures.map((lecture) => (
+              <option value="">
+                {questionSection === "past_paper" ? "Choose a past paper" : "Choose a lecture"}
+              </option>
+              {filteredQuestionLectures.map((lecture) => (
                 <option key={lecture.id} value={lecture.id}>
                   {[lecture.stage, lecture.block, lecture.module_name, lecture.title]
                     .filter(Boolean)
@@ -1460,113 +1484,23 @@ export default function AdminPanel() {
               </button>
             </>
           )}
-            </>
-          )}
         </form>
-        {questionSection === "quizzes" && (
-          <>
         <div className="card stack">
-          <h2 className="section-title">Question totals</h2>
+          <h2 className="section-title">
+            {questionSection === "past_paper" ? "Past paper totals" : "Question totals"}
+          </h2>
           <div className="action-row">
             <p className="muted">Apply shuffle to questions that were already saved before.</p>
             <button className="button secondary" onClick={shuffleExistingQuestions} type="button">
               Shuffle old questions
             </button>
           </div>
-          {questions.length === 0 && <p className="muted">No questions yet.</p>}
+          {filteredQuestions.length === 0 && <p className="muted">No questions yet.</p>}
           {questionSummary.map((item) => (
             <div className="panel action-row" key={item.lectureTitle}>
               <div>
                 <strong>{item.lectureTitle}</strong>
                 <p className="muted">{item.count} questions</p>
-              </div>
-            </div>
-          ))}
-        </div>
-          </>
-        )}
-        <div className="card stack">
-          <h2 className="section-title">Question reports</h2>
-          <div className="grid">
-            <label className="field">
-              <span>Filter by lecture</span>
-              <select
-                onChange={(event) => setReportLectureFilter(event.target.value)}
-                value={reportLectureFilter}
-              >
-                <option value="">All lectures</option>
-                {reportLectureOptions.map((lectureTitle) => (
-                  <option key={lectureTitle} value={lectureTitle}>
-                    {lectureTitle}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="field">
-              <span>Filter by status</span>
-              <select
-                onChange={(event) => setReportStatusFilter(event.target.value)}
-                value={reportStatusFilter}
-              >
-                <option value="all">All reports</option>
-                <option value="unanswered">Unanswered</option>
-                <option value="answered">Answered</option>
-              </select>
-            </label>
-          </div>
-          {reports.length === 0 && <p className="muted">No reports yet.</p>}
-          {reports.length > 0 && filteredReports.length === 0 && (
-            <p className="muted">No reports match this filter.</p>
-          )}
-          {filteredReports.map((report) => (
-            <div className="panel stack" key={report.id}>
-              <div className="action-row">
-                <div>
-                  <strong>{report.lectures?.title || "Lecture"}</strong>
-                  <p className="muted">
-                    {report.profiles?.email || "Student report"} /{" "}
-                    {report.answered_at ? "Answered" : "Waiting"}
-                  </p>
-                </div>
-                <button
-                  className="button danger"
-                  onClick={() =>
-                    deleteItem("question_reports", report.id, "Report deleted.")
-                  }
-                  type="button"
-                >
-                  Delete
-                </button>
-              </div>
-              <p className="muted">{report.questions?.question_text}</p>
-              <div className="message">{report.message}</div>
-              <label className="field">
-                <span>Your reply</span>
-                <textarea
-                  onChange={(event) =>
-                    setReportReplies((current) => ({
-                      ...current,
-                      [report.id]: event.target.value
-                    }))
-                  }
-                  placeholder="Write your answer to this student report."
-                  rows="3"
-                  value={reportReplies[report.id] || ""}
-                />
-              </label>
-              <div className="action-row">
-                {report.answered_at ? (
-                  <p className="muted">Answered already. You can edit and send again.</p>
-                ) : (
-                  <p className="muted">Not answered yet.</p>
-                )}
-                <button
-                  className="button"
-                  onClick={() => replyToReport(report.id)}
-                  type="button"
-                >
-                  Send reply
-                </button>
               </div>
             </div>
           ))}
@@ -1578,8 +1512,30 @@ export default function AdminPanel() {
         <div className="stack">
           <div className="card stack">
             <h2 className="section-title">Edit question</h2>
+            <div className="nav-links">
+              <button
+                className={`button ${editQuestionSection === "quizzes" ? "" : "secondary"}`}
+                onClick={() => {
+                  setEditQuestionSection("quizzes");
+                  cancelEditingQuestion();
+                }}
+                type="button"
+              >
+                Quizzes
+              </button>
+              <button
+                className={`button ${editQuestionSection === "past_paper" ? "" : "secondary"}`}
+                onClick={() => {
+                  setEditQuestionSection("past_paper");
+                  cancelEditingQuestion();
+                }}
+                type="button"
+              >
+                Past paper
+              </button>
+            </div>
             <p className="muted">
-              Choose the full lecture path, then pick the exact question you want to edit.
+              Choose the full path, then pick the exact question you want to edit.
             </p>
             <div className="grid">
               <label className="field">
@@ -1656,7 +1612,7 @@ export default function AdminPanel() {
               </label>
 
               <label className="field">
-                <span>Lecture</span>
+                <span>{editQuestionSection === "past_paper" ? "Past paper" : "Lecture"}</span>
                 <select
                   disabled={!editQuestionPath.module_name}
                   onChange={(event) => {
@@ -1669,7 +1625,11 @@ export default function AdminPanel() {
                   }}
                   value={editQuestionPath.lecture_id}
                 >
-                  <option value="">Choose lecture</option>
+                  <option value="">
+                    {editQuestionSection === "past_paper"
+                      ? "Choose past paper"
+                      : "Choose lecture"}
+                  </option>
                   {editLectureOptions.map((lecture) => (
                     <option key={lecture.id} value={lecture.id}>
                       {lecture.title}

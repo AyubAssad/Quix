@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 
 function cleanOptionLabel(label) {
@@ -11,30 +12,38 @@ function cleanOptionLabel(label) {
   return label.replace(/^[A-D][\.\):\-\s]+/i, "").trim();
 }
 
-export default function QuizClient({ lectureId, lectureTitle }) {
+function getResultStorageKey(contentKind, lectureId) {
+  return `quix-result:${contentKind}:${lectureId}`;
+}
+
+function getRetryStorageKey(contentKind, lectureId) {
+  return `quix-retry:${contentKind}:${lectureId}`;
+}
+
+export default function QuizClient({ lectureId, lectureTitle, contentKind = "lecture" }) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [user, setUser] = useState(null);
+  const [resolvedTitle, setResolvedTitle] = useState(lectureTitle);
   const [allQuestions, setAllQuestions] = useState([]);
   const [questions, setQuestions] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [checkedAnswers, setCheckedAnswers] = useState({});
   const [selectedOption, setSelectedOption] = useState("");
-  const [reportMessage, setReportMessage] = useState("");
-  const [reportStatus, setReportStatus] = useState("");
-  const [reportsByQuestion, setReportsByQuestion] = useState({});
   const [status, setStatus] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
+  const retryMode = searchParams.get("retry") === "incorrect";
+
   useEffect(() => {
     loadPage();
-  }, [lectureId]);
+  }, [lectureId, retryMode]);
 
   useEffect(() => {
     const currentQuestion = questions[currentIndex];
     const savedAnswer = currentQuestion ? checkedAnswers[currentQuestion.id]?.selected_option : "";
     setSelectedOption(savedAnswer ?? "");
-    setReportMessage("");
-    setReportStatus("");
   }, [checkedAnswers, currentIndex, questions]);
 
   async function loadPage() {
@@ -50,6 +59,14 @@ export default function QuizClient({ lectureId, lectureTitle }) {
 
     setUser(currentUser ?? null);
 
+    const { data: lectureData } = await supabase
+      .from("lectures")
+      .select("title")
+      .eq("id", lectureId)
+      .maybeSingle();
+
+    setResolvedTitle(lectureData?.title || lectureTitle);
+
     const { data, error } = await supabase
       .from("questions")
       .select(
@@ -64,43 +81,42 @@ export default function QuizClient({ lectureId, lectureTitle }) {
       return;
     }
 
-    setAllQuestions(data ?? []);
-    setQuestions(data ?? []);
-    if (currentUser) {
-      const { data: reportData } = await supabase
-        .from("question_reports")
-        .select("id, question_id, message, admin_reply, answered_at")
-        .eq("lecture_id", lectureId)
-        .eq("user_id", currentUser.id);
+    const fetchedQuestions = data ?? [];
+    let visibleQuestions = fetchedQuestions;
 
-      setReportsByQuestion(
-        Object.fromEntries((reportData ?? []).map((report) => [report.question_id, report]))
+    if (retryMode && typeof window !== "undefined") {
+      const retryIds = JSON.parse(
+        window.sessionStorage.getItem(getRetryStorageKey(contentKind, lectureId)) || "[]"
       );
-    } else {
-      setReportsByQuestion({});
+
+      if (Array.isArray(retryIds) && retryIds.length > 0) {
+        visibleQuestions = fetchedQuestions.filter((question) => retryIds.includes(question.id));
+      }
     }
+
+    setAllQuestions(fetchedQuestions);
+    setQuestions(visibleQuestions);
     setCurrentIndex(0);
     setCheckedAnswers({});
     setSelectedOption("");
+    setStatus("");
     setLoading(false);
   }
 
   const currentQuestion = questions[currentIndex];
   const currentAnswer = currentQuestion ? checkedAnswers[currentQuestion.id] : null;
-  const currentReport = currentQuestion ? reportsByQuestion[currentQuestion.id] : null;
   const incorrectQuestions = useMemo(() => {
-    return questions.filter((question) => checkedAnswers[question.id] && !checkedAnswers[question.id].is_correct);
+    return questions.filter(
+      (question) => checkedAnswers[question.id] && !checkedAnswers[question.id].is_correct
+    );
   }, [checkedAnswers, questions]);
-  const finishedQuiz =
-    questions.length > 0 &&
-    currentIndex === questions.length - 1 &&
-    Boolean(currentAnswer);
   const totalEarned = useMemo(() => {
     return Object.values(checkedAnswers).reduce(
       (sum, item) => sum + (item?.points_awarded ?? 0),
       0
     );
   }, [checkedAnswers]);
+  const isLastQuestion = currentIndex === questions.length - 1;
 
   async function checkAnswer() {
     if (!supabase) {
@@ -170,13 +186,6 @@ export default function QuizClient({ lectureId, lectureTitle }) {
     setSaving(false);
   }
 
-  function goToNextQuestion() {
-    if (currentIndex < questions.length - 1) {
-      setCurrentIndex((current) => current + 1);
-      setStatus("");
-    }
-  }
-
   function goToPreviousQuestion() {
     if (currentIndex > 0) {
       setCurrentIndex((current) => current - 1);
@@ -184,74 +193,38 @@ export default function QuizClient({ lectureId, lectureTitle }) {
     }
   }
 
-  function repeatIncorrectQuestions() {
-    if (incorrectQuestions.length === 0) {
+  function finalizeQuiz() {
+    if (typeof window === "undefined") {
       return;
     }
 
-    setQuestions(incorrectQuestions);
-    setCheckedAnswers({});
-    setCurrentIndex(0);
-    setSelectedOption("");
-    setStatus("");
-  }
+    const resultPayload = {
+      lectureId,
+      lectureTitle: resolvedTitle,
+      contentKind,
+      totalQuestions: questions.length,
+      correctCount: questions.length - incorrectQuestions.length,
+      incorrectCount: incorrectQuestions.length,
+      totalEarned,
+      incorrectQuestionIds: incorrectQuestions.map((question) => question.id),
+      retryMode
+    };
 
-  function restartFullQuiz() {
-    setQuestions(allQuestions);
-    setCheckedAnswers({});
-    setCurrentIndex(0);
-    setSelectedOption("");
-    setStatus("");
-  }
-
-  async function submitReport() {
-    if (!supabase) {
-      setReportStatus("Add your Supabase URL and anon key in .env.local first.");
-      return;
-    }
-
-    if (!user) {
-      setReportStatus("Please login first to send a report.");
-      return;
-    }
-
-    if (!currentQuestion) {
-      return;
-    }
-
-    const trimmedMessage = reportMessage.trim();
-    if (!trimmedMessage) {
-      setReportStatus("Please write your message first.");
-      return;
-    }
-
-    const { error } = await supabase.from("question_reports").upsert(
-      {
-        user_id: user.id,
-        lecture_id: lectureId,
-        question_id: currentQuestion.id,
-        message: trimmedMessage
-      },
-      { onConflict: "user_id,question_id" }
+    window.sessionStorage.setItem(
+      getResultStorageKey(contentKind, lectureId),
+      JSON.stringify(resultPayload)
     );
+    router.push(`/results/${lectureId}?kind=${contentKind}`);
+  }
 
-    if (error) {
-      setReportStatus(error.message);
+  function goToNextQuestion() {
+    if (isLastQuestion) {
+      finalizeQuiz();
       return;
     }
 
-    setReportStatus("Your report was sent.");
-    setReportsByQuestion((current) => ({
-      ...current,
-      [currentQuestion.id]: {
-        ...(current[currentQuestion.id] || {}),
-        question_id: currentQuestion.id,
-        message: trimmedMessage,
-        admin_reply: current[currentQuestion.id]?.admin_reply || null,
-        answered_at: current[currentQuestion.id]?.answered_at || null
-      }
-    }));
-    setReportMessage("");
+    setCurrentIndex((current) => current + 1);
+    setStatus("");
   }
 
   if (loading) {
@@ -259,7 +232,13 @@ export default function QuizClient({ lectureId, lectureTitle }) {
   }
 
   if (!currentQuestion) {
-    return <div className="panel">No questions found for this lecture yet.</div>;
+    return (
+      <div className="panel">
+        {retryMode
+          ? "No incorrect questions were found to repeat."
+          : "No questions found for this content yet."}
+      </div>
+    );
   }
 
   return (
@@ -274,7 +253,7 @@ export default function QuizClient({ lectureId, lectureTitle }) {
         <div className="quiz-header">
           <div>
             <h3>
-              {lectureTitle} <span className="pill">Question {currentIndex + 1} of {questions.length}</span>
+              {resolvedTitle} <span className="pill">Question {currentIndex + 1} of {questions.length}</span>
             </h3>
             <p className="muted">Each question is worth 1 point.</p>
           </div>
@@ -334,32 +313,6 @@ export default function QuizClient({ lectureId, lectureTitle }) {
               {saving ? "Checking..." : "Check answer"}
             </button>
           )}
-
-          <div className="report-box">
-            <label className="field">
-              <span>Report this question</span>
-              <textarea
-                onChange={(event) => setReportMessage(event.target.value)}
-                placeholder="Send a note if this question has a mistake or needs review."
-                rows="3"
-                value={reportMessage}
-              />
-            </label>
-            <button className="button secondary" onClick={submitReport} type="button">
-              Send report
-            </button>
-            {reportStatus && <div className="message">{reportStatus}</div>}
-            {currentReport?.message && (
-              <div className="message">
-                Your last report: {currentReport.message}
-              </div>
-            )}
-            {currentReport?.admin_reply && (
-              <div className="message message-success">
-                Admin reply: {currentReport.admin_reply}
-              </div>
-            )}
-          </div>
         </div>
 
         <div className="quiz-nav">
@@ -373,39 +326,13 @@ export default function QuizClient({ lectureId, lectureTitle }) {
           </button>
           <button
             className="button"
-            disabled={!currentAnswer || currentIndex === questions.length - 1}
+            disabled={!currentAnswer}
             onClick={goToNextQuestion}
             type="button"
           >
-            Next question
+            {isLastQuestion ? "End quiz" : "Next question"}
           </button>
         </div>
-
-        {finishedQuiz && (
-          <div className="stack">
-            <div className="message">
-              Quiz complete for {lectureTitle}. You earned {totalEarned} points.
-            </div>
-            <div className="quiz-nav">
-              <button
-                className="button secondary"
-                disabled={incorrectQuestions.length === 0}
-                onClick={repeatIncorrectQuestions}
-                type="button"
-              >
-                Repeat incorrect questions
-              </button>
-              <a className="button" href="/home">
-                Return to home
-              </a>
-            </div>
-            {questions.length !== allQuestions.length && (
-              <button className="button secondary" onClick={restartFullQuiz} type="button">
-                Restart full quiz
-              </button>
-            )}
-          </div>
-        )}
 
         {status && !currentAnswer && <div className="message">{status}</div>}
       </div>

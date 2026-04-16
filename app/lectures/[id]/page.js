@@ -8,7 +8,7 @@ export default function LecturePage({ params }) {
         <h1 className="section-title">Lecture quiz</h1>
         <p className="muted">Answer all questions below and submit to get points.</p>
       </div>
-      <QuizClient lectureId={params.id} lectureTitle="this lecture" />
+      <QuizClient contentKind="lecture" lectureId={params.id} lectureTitle="this lecture" />
     </AppShell>
   );
 }

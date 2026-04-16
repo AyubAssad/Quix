@@ -33,6 +33,7 @@ create table if not exists public.modules (
 
 create table if not exists public.lectures (
   id uuid primary key default gen_random_uuid(),
+  content_type text not null default 'quiz' check (content_type in ('quiz', 'past_paper')),
   stage text not null,
   block text not null,
   module_name text not null,
@@ -44,10 +45,16 @@ create table if not exists public.lectures (
 alter table public.lectures add column if not exists stage text;
 alter table public.lectures add column if not exists block text;
 alter table public.lectures add column if not exists module_name text;
+alter table public.lectures add column if not exists content_type text not null default 'quiz';
+alter table public.lectures drop constraint if exists lectures_content_type_check;
+alter table public.lectures
+add constraint lectures_content_type_check
+check (content_type in ('quiz', 'past_paper'));
 
 create table if not exists public.questions (
   id uuid primary key default gen_random_uuid(),
   lecture_id uuid not null references public.lectures(id) on delete cascade,
+  content_type text not null default 'quiz' check (content_type in ('quiz', 'past_paper')),
   question_type text not null default 'mcq' check (question_type in ('mcq', 'true_false')),
   question_text text not null,
   option_a text not null,
@@ -60,9 +67,25 @@ create table if not exists public.questions (
 );
 
 alter table public.questions add column if not exists question_type text not null default 'mcq';
+alter table public.questions add column if not exists content_type text not null default 'quiz';
 alter table public.questions alter column option_c drop not null;
 alter table public.questions alter column option_d drop not null;
 alter table public.questions alter column points set default 1;
+alter table public.questions drop constraint if exists questions_content_type_check;
+alter table public.questions
+add constraint questions_content_type_check
+check (content_type in ('quiz', 'past_paper'));
+
+update public.questions
+set content_type = coalesce(
+  (
+    select lectures.content_type
+    from public.lectures
+    where lectures.id = public.questions.lecture_id
+  ),
+  'quiz'
+)
+where content_type is null or content_type = '';
 
 create table if not exists public.submissions (
   id uuid primary key default gen_random_uuid(),

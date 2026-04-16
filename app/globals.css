@@ -562,12 +562,70 @@ select {
   flex-wrap: wrap;
 }
 
-.report-box {
-  display: grid;
-  gap: 12px;
-  margin-top: 8px;
-  padding-top: 12px;
-  border-top: 1px solid var(--line);
+.result-badge {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 20px 22px;
+  border-radius: 22px;
+  border: 1px solid var(--line-strong);
+  background: rgba(18, 27, 24, 0.96);
+}
+
+.result-badge-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 68px;
+  height: 68px;
+  border-radius: 22px;
+  flex-shrink: 0;
+}
+
+.result-badge-top {
+  border-color: rgba(255, 215, 96, 0.35);
+  box-shadow: 0 0 0 1px rgba(255, 215, 96, 0.08), 0 0 30px rgba(255, 215, 96, 0.08);
+}
+
+.result-badge-top .result-badge-icon {
+  color: #1d1700;
+  background: linear-gradient(135deg, #ffe791, #f3b73f);
+  animation: trophyPulse 2.4s ease-in-out infinite;
+}
+
+.result-badge-mid {
+  border-color: rgba(87, 183, 179, 0.32);
+}
+
+.result-badge-mid .result-badge-icon {
+  color: #062725;
+  background: linear-gradient(135deg, #7ce2d4, #57b7b3);
+}
+
+.result-badge-low {
+  border-color: rgba(220, 123, 123, 0.3);
+}
+
+.result-badge-low .result-badge-icon {
+  color: #351111;
+  background: linear-gradient(135deg, #ffb0b0, #dc7b7b);
+}
+
+@keyframes trophyPulse {
+  0% {
+    transform: translateY(0) scale(1);
+    box-shadow: 0 0 0 0 rgba(255, 215, 96, 0.25);
+  }
+
+  50% {
+    transform: translateY(-3px) scale(1.04);
+    box-shadow: 0 0 0 12px rgba(255, 215, 96, 0);
+  }
+
+  100% {
+    transform: translateY(0) scale(1);
+    box-shadow: 0 0 0 0 rgba(255, 215, 96, 0);
+  }
 }
 
 .oauth-divider {
