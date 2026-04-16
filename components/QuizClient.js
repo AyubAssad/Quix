@@ -8,7 +8,7 @@ function cleanOptionLabel(label) {
     return "";
   }
 
-  return label.replace(/^[A-D]\.\s*/i, "").trim();
+  return label.replace(/^[A-D][\.\):\-\s]+/i, "").trim();
 }
 
 export default function QuizClient({ lectureId, lectureTitle }) {
