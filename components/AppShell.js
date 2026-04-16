@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { Home, LayoutGrid, LogIn, LogOut, Shield, Trophy, UserPlus } from "lucide-react";
+import { Clock3, Home, LayoutGrid, LogIn, LogOut, Shield, Trophy, UserPlus } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 
 export default function AppShell({ children }) {
@@ -63,6 +63,10 @@ export default function AppShell({ children }) {
           <Link className="button secondary" href="/leaderboard">
             <Trophy size={16} />
             Leaderboard
+          </Link>
+          <Link className="button secondary" href="/pomodoro">
+            <Clock3 size={16} />
+            Pomodoro
           </Link>
           {!user && (
             <>

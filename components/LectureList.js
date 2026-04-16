@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
 
 export default function LectureList() {
+  const [activeSection, setActiveSection] = useState("quizzes");
   const [stages, setStages] = useState([]);
   const [blocks, setBlocks] = useState([]);
   const [modules, setModules] = useState([]);
@@ -122,11 +123,18 @@ export default function LectureList() {
     return visibleLectures.find((lecture) => lecture.id === selectedLectureId) ?? null;
   }, [visibleLectures, selectedLectureId]);
 
+  const isPastPaper = activeSection === "past_paper";
+  const currentStageOptions = isPastPaper ? [] : stageOptions;
+  const currentBlockOptions = isPastPaper ? [] : blockOptions;
+  const currentModuleOptions = isPastPaper ? [] : moduleOptions;
+  const currentVisibleLectures = isPastPaper ? [] : visibleLectures;
+  const currentSelectedLecture = isPastPaper ? null : selectedLecture;
+
   if (loading) {
     return <div className="panel">Loading lectures...</div>;
   }
 
-  if (stageOptions.length === 0) {
+  if (activeSection === "quizzes" && stageOptions.length === 0) {
     return (
       <div className="panel">
         <p className="muted">
@@ -141,14 +149,54 @@ export default function LectureList() {
   return (
     <div className="stack">
       <div className="card">
-        <h2 className="section-title">Select your lecture path</h2>
+        <h2 className="section-title">Choose your section</h2>
         <p className="muted">
-          Choose your stage, then block, then module from the dropdowns below.
+          Open quizzes for your normal lecture quizzes, or switch to past paper for the same path layout.
+        </p>
+        <div className="nav-links">
+          <button
+            className={`button ${activeSection === "quizzes" ? "" : "secondary"}`}
+            onClick={() => {
+              setActiveSection("quizzes");
+              setSelectedStage("");
+              setSelectedBlock("");
+              setSelectedModule("");
+              setSelectedLectureId("");
+            }}
+            type="button"
+          >
+            Quizzes
+          </button>
+          <button
+            className={`button ${activeSection === "past_paper" ? "" : "secondary"}`}
+            onClick={() => {
+              setActiveSection("past_paper");
+              setSelectedStage("");
+              setSelectedBlock("");
+              setSelectedModule("");
+              setSelectedLectureId("");
+            }}
+            type="button"
+          >
+            Past paper
+          </button>
+        </div>
+      </div>
+
+      <div className="card">
+        <h2 className="section-title">
+          {isPastPaper ? "Select your past paper path" : "Select your lecture path"}
+        </h2>
+        <p className="muted">
+          {isPastPaper
+            ? "Past paper uses the same structure, but no past paper data has been added yet."
+            : "Choose your stage, then block, then module from the dropdowns below."}
         </p>
         <div className="grid">
           <label className="field">
             <span>Stage</span>
             <select
+              disabled={isPastPaper || currentStageOptions.length === 0}
               onChange={(event) => {
                 setSelectedStage(event.target.value);
                 setSelectedBlock("");
@@ -157,8 +205,8 @@ export default function LectureList() {
               }}
               value={selectedStage}
             >
-              <option value="">Choose stage</option>
-              {stageOptions.map((stage) => (
+              <option value="">{isPastPaper ? "No stage yet" : "Choose stage"}</option>
+              {currentStageOptions.map((stage) => (
                 <option key={stage} value={stage}>
                   {stage}
                 </option>
@@ -169,7 +217,7 @@ export default function LectureList() {
           <label className="field">
             <span>Block</span>
             <select
-              disabled={!selectedStage || blockOptions.length === 0}
+              disabled={isPastPaper || !selectedStage || currentBlockOptions.length === 0}
               onChange={(event) => {
                 setSelectedBlock(event.target.value);
                 setSelectedModule("");
@@ -178,9 +226,13 @@ export default function LectureList() {
               value={selectedBlock}
             >
               <option value="">
-                {!selectedStage ? "Choose stage first" : "Choose block"}
+                {isPastPaper
+                  ? "No block yet"
+                  : !selectedStage
+                    ? "Choose stage first"
+                    : "Choose block"}
               </option>
-              {blockOptions.map((block) => (
+              {currentBlockOptions.map((block) => (
                 <option key={block} value={block}>
                   {block}
                 </option>
@@ -191,7 +243,7 @@ export default function LectureList() {
           <label className="field">
             <span>Module</span>
             <select
-              disabled={!selectedBlock || moduleOptions.length === 0}
+              disabled={isPastPaper || !selectedBlock || currentModuleOptions.length === 0}
               onChange={(event) => {
                 setSelectedModule(event.target.value);
                 setSelectedLectureId("");
@@ -199,9 +251,13 @@ export default function LectureList() {
               value={selectedModule}
             >
               <option value="">
-                {!selectedBlock ? "Choose block first" : "Choose module"}
+                {isPastPaper
+                  ? "No module yet"
+                  : !selectedBlock
+                    ? "Choose block first"
+                    : "Choose module"}
               </option>
-              {moduleOptions.map((moduleName) => (
+              {currentModuleOptions.map((moduleName) => (
                 <option key={moduleName} value={moduleName}>
                   {moduleName}
                 </option>
@@ -210,26 +266,29 @@ export default function LectureList() {
           </label>
         </div>
 
-        {selectedStage && blockOptions.length === 0 && (
+        {!isPastPaper && selectedStage && currentBlockOptions.length === 0 && (
           <p className="muted">No blocks yet in this stage.</p>
         )}
-        {selectedBlock && moduleOptions.length === 0 && (
+        {!isPastPaper && selectedBlock && currentModuleOptions.length === 0 && (
           <p className="muted">No modules yet in this block.</p>
+        )}
+        {isPastPaper && (
+          <p className="muted">Past paper is ready as a section, but no data has been added yet.</p>
         )}
       </div>
 
-      {selectedModule && (
+      {selectedModule && !isPastPaper && (
         <div className="card">
           <h2 className="section-title">Open a lecture</h2>
           <label className="field">
             <span>Lecture</span>
             <select
-              disabled={visibleLectures.length === 0}
+              disabled={currentVisibleLectures.length === 0}
               onChange={(event) => setSelectedLectureId(event.target.value)}
               value={selectedLectureId}
             >
               <option value="">Choose lecture</option>
-              {visibleLectures.map((lecture) => (
+              {currentVisibleLectures.map((lecture) => (
                 <option key={lecture.id} value={lecture.id}>
                   {lecture.title}
                 </option>
@@ -237,17 +296,17 @@ export default function LectureList() {
             </select>
           </label>
 
-          {visibleLectures.length === 0 && (
+          {currentVisibleLectures.length === 0 && (
             <p className="muted">No lectures were found in this module yet.</p>
           )}
 
-          {selectedLecture && (
+          {currentSelectedLecture && (
             <div className="panel">
-              <h3>{selectedLecture.title}</h3>
+              <h3>{currentSelectedLecture.title}</h3>
               <p className="muted">
-                {selectedLecture.description || "No description yet."}
+                {currentSelectedLecture.description || "No description yet."}
               </p>
-              <Link className="button" href={`/lectures/${selectedLecture.id}`}>
+              <Link className="button" href={`/lectures/${currentSelectedLecture.id}`}>
                 Start quiz
               </Link>
             </div>

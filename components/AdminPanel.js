@@ -96,6 +96,7 @@ export default function AdminPanel() {
   const [bulkQuestionType, setBulkQuestionType] = useState("mcq");
   const [bulkQuestionsText, setBulkQuestionsText] = useState("");
   const [shuffleAnswers, setShuffleAnswers] = useState(true);
+  const [questionSection, setQuestionSection] = useState("quizzes");
 
   const stageOptions = useMemo(() => {
     const allStages = [
@@ -1219,6 +1220,29 @@ export default function AdminPanel() {
           <h2 className="section-title">Add question</h2>
           <div className="nav-links">
             <button
+              className={`button ${questionSection === "quizzes" ? "" : "secondary"}`}
+              onClick={() => setQuestionSection("quizzes")}
+              type="button"
+            >
+              Quizzes
+            </button>
+            <button
+              className={`button ${questionSection === "past_paper" ? "" : "secondary"}`}
+              onClick={() => setQuestionSection("past_paper")}
+              type="button"
+            >
+              Past paper
+            </button>
+          </div>
+          {questionSection === "past_paper" && (
+            <div className="message">
+              Past paper has its own section now. The upload and question tools for it will be added next.
+            </div>
+          )}
+          {questionSection === "quizzes" && (
+            <>
+          <div className="nav-links">
+            <button
               className={`button ${questionMode === "single" ? "" : "secondary"}`}
               onClick={() => setQuestionMode("single")}
               type="button"
@@ -1436,7 +1460,11 @@ export default function AdminPanel() {
               </button>
             </>
           )}
+            </>
+          )}
         </form>
+        {questionSection === "quizzes" && (
+          <>
         <div className="card stack">
           <h2 className="section-title">Question totals</h2>
           <div className="action-row">
@@ -1455,6 +1483,8 @@ export default function AdminPanel() {
             </div>
           ))}
         </div>
+          </>
+        )}
         <div className="card stack">
           <h2 className="section-title">Question reports</h2>
           <div className="grid">
